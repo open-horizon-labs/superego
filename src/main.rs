@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use std::path::Path;
 
+mod decision;
 mod tools;
 mod transcript;
 
@@ -124,7 +125,45 @@ fn main() {
             println!("sg override {:?} - not yet implemented", reason);
         }
         Commands::History { limit } => {
-            println!("sg history --limit {} - not yet implemented", limit);
+            let superego_dir = Path::new(".superego");
+            let journal = decision::Journal::new(superego_dir);
+
+            match journal.read_all() {
+                Ok(decisions) => {
+                    let start = decisions.len().saturating_sub(limit);
+                    let recent: Vec<_> = decisions.into_iter().skip(start).collect();
+
+                    if recent.is_empty() {
+                        println!("No decisions recorded yet.");
+                    } else {
+                        println!("Last {} decision(s):\n", recent.len());
+                        for d in recent {
+                            println!("---");
+                            println!("Timestamp: {}", d.timestamp);
+                            println!("Type: {:?}", d.decision_type);
+                            if let Some(from) = d.from_state {
+                                println!("From: {}", from);
+                            }
+                            if let Some(to) = d.to_state {
+                                println!("To: {}", to);
+                            }
+                            if let Some(trigger) = &d.trigger {
+                                println!("Trigger: {}", trigger);
+                            }
+                            if let Some(scope) = &d.approved_scope {
+                                println!("Scope: {}", scope);
+                            }
+                            if let Some(ctx) = &d.context {
+                                println!("Context: {}", ctx);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error reading decisions: {}", e);
+                    std::process::exit(1);
+                }
+            }
         }
         Commands::ContextInject => {
             println!("sg context-inject - not yet implemented");
