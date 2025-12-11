@@ -177,6 +177,17 @@ sg reset
 - Optionally clears `session/` (superego's Claude session)
 - Preserves `decisions/` journal (audit trail)
 
+### sg precompact
+Called by `PreCompact` hook. Snapshots state before context compaction.
+
+```bash
+sg precompact --transcript-path /path/to/session.jsonl
+```
+
+- Reads current transcript before it's compacted
+- Writes summary decision to journal capturing current understanding
+- Ensures superego retains context even after Claude's context is compressed
+
 ### sg disable / sg enable
 Escape hatch to bypass superego.
 
@@ -192,8 +203,10 @@ sg enable    # Clears disabled flag
 
 ```
 .superego/
+├── config.yaml             ← Configuration (model, timeouts, etc.)
 ├── state.json              ← Current phase (cached between user messages)
-├── prompt.md               ← Superego system prompt (customizable)
+├── prompt.md               ← Superego system prompt (customizable, defaults to embedded)
+├── audit.log               ← Detailed log of all sg commands for debugging
 ├── session/                ← Superego's own Claude session (persistent)
 └── decisions/              ← Decision journal (project-scoped)
     ├── 2024-01-15T10-30-00Z.yaml
@@ -249,6 +262,12 @@ approved_scope: "Implement JWT authentication in auth.ts"
         "matcher": "Edit|Write|Bash|Task|NotebookEdit",
         "type": "command",
         "command": "sg check --tool-name $TOOL_NAME"
+      }
+    ],
+    "PreCompact": [
+      {
+        "type": "command",
+        "command": "sg precompact --transcript-path $TRANSCRIPT_PATH"
       }
     ],
     "SessionStart": [
@@ -325,6 +344,29 @@ Which would you prefer?
 | `sg evaluate` fails/times out | Log warning, assume EXPLORING (safe default) |
 | `sg check` can't read state.json | Block with "superego state unavailable" |
 | Superego session corrupted | `sg reset` to clear and restart |
+| Transcript path doesn't exist | Skip superego entirely (no transcript = no gating) |
+| Hook timeout (60s default) | Future enhancement: consider async evaluation |
+
+## Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| First message is ambiguous ("fix the bug") | Superego indicates DISCUSSING, suggests Claude clarify scope |
+| User sends short confirmation ("ok") | Superego reads full transcript to understand context of "ok" |
+| Rapid successive messages | Possible race on state.json - noted as potential issue |
+| Context compaction | PreCompact hook snapshots current understanding to decisions journal |
+
+## Audit Trail
+
+Superego maintains detailed logs for debugging:
+
+```
+.superego/
+├── audit.log              ← Timestamped log of all sg commands
+└── ...
+```
+
+Each entry includes: timestamp, command, inputs, decision, reason.
 
 ## Escape Hatch
 
