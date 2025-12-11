@@ -125,7 +125,9 @@ sg override "user approved JWT approach"
 ```
 
 - Writes `override_granted` decision to journal
-- Temporarily allows blocked action
+- **Scope: Single action only** - allows the next blocked tool call, then re-evaluates
+- Does NOT change phase or persist beyond one action
+- Forces explicit re-confirmation for safety
 
 ### sg history
 Query past decisions for context recovery.
