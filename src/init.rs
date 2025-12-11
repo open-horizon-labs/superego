@@ -45,7 +45,12 @@ impl From<crate::state::StateError> for InitError {
 
 /// Initialize superego in the current directory
 pub fn init(force: bool) -> Result<(), InitError> {
-    let superego_dir = Path::new(".superego");
+    init_at(Path::new("."), force)
+}
+
+/// Initialize superego at a specific path
+pub fn init_at(base_dir: &Path, force: bool) -> Result<(), InitError> {
+    let superego_dir = base_dir.join(".superego");
 
     // Check if already exists
     if superego_dir.exists() && !force {
@@ -60,7 +65,7 @@ pub fn init(force: bool) -> Result<(), InitError> {
     fs::write(superego_dir.join("prompt.md"), DEFAULT_PROMPT)?;
 
     // Create initial state
-    let state_mgr = StateManager::new(superego_dir);
+    let state_mgr = StateManager::new(&superego_dir);
     let initial_state = State {
         phase: Phase::Exploring,
         ..State::default()
@@ -84,34 +89,31 @@ mod tests {
     #[test]
     fn test_init_creates_structure() {
         let dir = tempdir().unwrap();
-        std::env::set_current_dir(dir.path()).unwrap();
 
-        init(false).unwrap();
+        init_at(dir.path(), false).unwrap();
 
-        assert!(Path::new(".superego").exists());
-        assert!(Path::new(".superego/decisions").exists());
-        assert!(Path::new(".superego/session").exists());
-        assert!(Path::new(".superego/prompt.md").exists());
-        assert!(Path::new(".superego/state.json").exists());
-        assert!(Path::new(".superego/config.yaml").exists());
+        assert!(dir.path().join(".superego").exists());
+        assert!(dir.path().join(".superego/decisions").exists());
+        assert!(dir.path().join(".superego/session").exists());
+        assert!(dir.path().join(".superego/prompt.md").exists());
+        assert!(dir.path().join(".superego/state.json").exists());
+        assert!(dir.path().join(".superego/config.yaml").exists());
     }
 
     #[test]
     fn test_init_fails_if_exists() {
         let dir = tempdir().unwrap();
-        std::env::set_current_dir(dir.path()).unwrap();
 
-        init(false).unwrap();
-        let result = init(false);
+        init_at(dir.path(), false).unwrap();
+        let result = init_at(dir.path(), false);
         assert!(matches!(result, Err(InitError::AlreadyExists)));
     }
 
     #[test]
     fn test_init_force_overwrites() {
         let dir = tempdir().unwrap();
-        std::env::set_current_dir(dir.path()).unwrap();
 
-        init(false).unwrap();
-        init(true).unwrap(); // Should succeed with force
+        init_at(dir.path(), false).unwrap();
+        init_at(dir.path(), true).unwrap(); // Should succeed with force
     }
 }

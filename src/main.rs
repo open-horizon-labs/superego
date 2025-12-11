@@ -3,6 +3,7 @@ use std::path::Path;
 
 mod claude;
 mod decision;
+mod evaluate;
 mod init;
 mod state;
 mod tools;
@@ -103,29 +104,34 @@ fn main() {
             }
         }
         Commands::Evaluate { transcript_path } => {
-            let path = Path::new(&transcript_path);
-            match transcript::read_transcript(path) {
-                Ok(entries) => {
-                    let messages: Vec<_> = entries.iter().filter(|e| e.is_message()).collect();
-                    let session_id = transcript::extract_session_id(&entries);
+            let transcript = Path::new(&transcript_path);
+            let superego_dir = Path::new(".superego");
 
-                    println!("Transcript loaded: {} entries, {} messages", entries.len(), messages.len());
-                    if let Some(sid) = session_id {
-                        println!("Session ID: {}", sid);
-                    }
+            // Check if superego is initialized
+            if !superego_dir.exists() {
+                eprintln!("Superego not initialized. Run 'sg init' first.");
+                std::process::exit(1);
+            }
 
-                    // Show recent context
-                    println!("\n--- Recent context (last 5 messages) ---");
-                    let context = transcript::format_recent_context(&entries, 5);
-                    println!("{}", context);
+            // Run evaluation with fallback
+            let result = evaluate::evaluate_with_fallback(transcript, superego_dir, 10);
 
-                    // TODO: Call superego LLM for phase evaluation
-                    println!("sg evaluate - phase inference not yet implemented");
-                }
-                Err(e) => {
-                    eprintln!("Error reading transcript: {}", e);
-                    std::process::exit(1);
-                }
+            // Output result as JSON for hook consumption
+            println!(
+                r#"{{"phase": "{}", "previous": "{}", "changed": {}, "cost_usd": {:.6}}}"#,
+                result.phase,
+                result.previous_phase,
+                result.changed,
+                result.cost_usd
+            );
+
+            // Log concerns to stderr (visible but doesn't affect hook)
+            for concern in &result.concerns {
+                eprintln!("Concern: {}", concern);
+            }
+
+            if let Some(scope) = &result.approved_scope {
+                eprintln!("Approved scope: {}", scope);
             }
         }
         Commands::Check { tool_name } => {
