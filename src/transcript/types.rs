@@ -91,6 +91,15 @@ impl TranscriptEntry {
         }
     }
 
+    /// Get the timestamp if available
+    pub fn timestamp(&self) -> Option<&str> {
+        match self {
+            TranscriptEntry::User { timestamp, .. } => timestamp.as_deref(),
+            TranscriptEntry::Assistant { timestamp, .. } => timestamp.as_deref(),
+            _ => None,
+        }
+    }
+
     /// Check if this is a user message
     pub fn is_user(&self) -> bool {
         matches!(self, TranscriptEntry::User { .. })

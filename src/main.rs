@@ -117,7 +117,7 @@ fn main() {
             }
 
             // Run LLM evaluation
-            match evaluate::evaluate_llm(transcript, superego_dir, 10) {
+            match evaluate::evaluate_llm(transcript, superego_dir) {
                 Ok(result) => {
                     println!(
                         r#"{{"has_concerns": {}, "cost_usd": {:.6}}}"#,
@@ -223,7 +223,7 @@ fn main() {
             }
 
             // Run LLM evaluation
-            match evaluate::evaluate_llm(transcript, superego_dir, 10) {
+            match evaluate::evaluate_llm(transcript, superego_dir) {
                 Ok(result) => {
                     // Output for hook/debugging
                     println!(

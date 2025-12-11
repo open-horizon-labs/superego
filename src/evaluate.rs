@@ -1,8 +1,6 @@
 /// Evaluation for superego
 ///
-/// Two evaluation modes:
-/// - evaluate_bd: Fast check of bd task state (no LLM)
-/// - evaluate_llm: Rich feedback from LLM
+/// LLM-based evaluation with natural language feedback.
 
 use std::fs;
 use std::path::Path;
@@ -69,14 +67,30 @@ pub struct LlmEvaluationResult {
 ///
 /// AIDEV-NOTE: This calls Claude with the superego prompt and gets
 /// rich natural language feedback that Claude can reason about.
-/// No JSON parsing, no phase extraction - just feedback text.
+/// Context is everything since last_evaluated - not an arbitrary window.
 pub fn evaluate_llm(
     transcript_path: &Path,
     superego_dir: &Path,
-    context_limit: usize,
 ) -> Result<LlmEvaluationResult, EvaluateError> {
+    // Load state to get last_evaluated timestamp
+    let state_mgr = StateManager::new(superego_dir);
+    let state = state_mgr.load().unwrap_or_default();
+
     // Load transcript
     let entries = transcript::read_transcript(transcript_path)?;
+
+    // Get messages since last evaluation
+    let messages = transcript::get_messages_since(&entries, state.last_evaluated);
+
+    // Skip if nothing new to evaluate
+    if messages.is_empty() {
+        return Ok(LlmEvaluationResult {
+            feedback: "No concerns.".to_string(),
+            has_concerns: false,
+            cost_usd: 0.0,
+            session_id: String::new(),
+        });
+    }
 
     // Load system prompt
     let prompt_path = superego_dir.join("prompt.md");
@@ -87,7 +101,7 @@ pub fn evaluate_llm(
     };
 
     // Format conversation context
-    let context = transcript::format_recent_context(&entries, context_limit);
+    let context = transcript::format_context(&messages);
 
     // Get bd task context
     let bd_context = match bd::evaluate() {
@@ -133,8 +147,7 @@ pub fn evaluate_llm(
         fs::write(session_path, &response.session_id)?;
     }
 
-    // Update last_evaluated timestamp
-    let state_mgr = StateManager::new(superego_dir);
+    // Update last_evaluated timestamp (reuse state_mgr from top)
     if let Err(e) = state_mgr.update(|s| s.mark_evaluated()) {
         eprintln!("Warning: failed to update state: {}", e);
     }

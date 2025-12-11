@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -56,25 +57,39 @@ pub fn read_transcript(path: &Path) -> Result<Vec<TranscriptEntry>, TranscriptEr
     Ok(entries)
 }
 
-/// Get recent conversation messages (user and assistant only)
-pub fn get_recent_messages(entries: &[TranscriptEntry], limit: usize) -> Vec<&TranscriptEntry> {
-    entries
-        .iter()
-        .filter(|e| e.is_message())
-        .rev()
-        .take(limit)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect()
+/// Get messages since a given timestamp
+/// AIDEV-NOTE: This is the primary context selection method. We evaluate
+/// everything new since the last evaluation, not an arbitrary window.
+pub fn get_messages_since(
+    entries: &[TranscriptEntry],
+    since: Option<DateTime<Utc>>,
+) -> Vec<&TranscriptEntry> {
+    match since {
+        Some(cutoff) => {
+            entries
+                .iter()
+                .filter(|e| e.is_message())
+                .filter(|e| {
+                    // Include if timestamp is after cutoff (or if no timestamp)
+                    e.timestamp()
+                        .and_then(|ts| DateTime::parse_from_rfc3339(ts).ok())
+                        .map(|ts| ts > cutoff)
+                        .unwrap_or(true) // Include entries without timestamps
+                })
+                .collect()
+        }
+        None => {
+            // No previous evaluation - include all messages
+            entries.iter().filter(|e| e.is_message()).collect()
+        }
+    }
 }
 
-/// Format recent messages for context (for sending to superego LLM)
-pub fn format_recent_context(entries: &[TranscriptEntry], limit: usize) -> String {
-    let recent = get_recent_messages(entries, limit);
+/// Format messages for context (for sending to superego LLM)
+pub fn format_context(messages: &[&TranscriptEntry]) -> String {
     let mut output = String::new();
 
-    for entry in recent {
+    for entry in messages {
         match entry {
             TranscriptEntry::User { .. } => {
                 if let Some(text) = entry.user_text() {
