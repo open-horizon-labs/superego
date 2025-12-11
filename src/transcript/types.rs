@@ -1,0 +1,174 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+/// A single entry in the transcript JSONL file
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum TranscriptEntry {
+    /// Conversation summary
+    Summary {
+        summary: String,
+        #[serde(rename = "leafUuid")]
+        leaf_uuid: Option<String>,
+    },
+    /// File history snapshot
+    #[serde(rename = "file-history-snapshot")]
+    FileHistorySnapshot {
+        #[serde(rename = "messageId")]
+        message_id: Option<String>,
+    },
+    /// User message
+    User {
+        uuid: String,
+        #[serde(rename = "parentUuid")]
+        parent_uuid: Option<String>,
+        #[serde(rename = "sessionId")]
+        session_id: Option<String>,
+        timestamp: Option<String>,
+        message: UserMessage,
+    },
+    /// Assistant message
+    Assistant {
+        uuid: String,
+        #[serde(rename = "parentUuid")]
+        parent_uuid: Option<String>,
+        #[serde(rename = "sessionId")]
+        session_id: Option<String>,
+        timestamp: Option<String>,
+        message: AssistantMessage,
+    },
+    /// Catch-all for unknown types
+    #[serde(other)]
+    Unknown,
+}
+
+/// User message structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserMessage {
+    pub role: String,
+    pub content: UserContent,
+}
+
+/// User content can be string or array of blocks
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum UserContent {
+    Text(String),
+    Blocks(Vec<UserContentBlock>),
+}
+
+/// User content block
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserContentBlock {
+    #[serde(rename = "type")]
+    pub block_type: String,
+    pub text: Option<String>,
+}
+
+/// Assistant message structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssistantMessage {
+    pub role: String,
+    pub content: Vec<AssistantContentBlock>,
+    pub model: Option<String>,
+}
+
+/// Assistant content block
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssistantContentBlock {
+    #[serde(rename = "type")]
+    pub block_type: String,
+    pub text: Option<String>,
+    pub thinking: Option<String>,
+}
+
+impl TranscriptEntry {
+    /// Get the session ID if available
+    pub fn session_id(&self) -> Option<&str> {
+        match self {
+            TranscriptEntry::User { session_id, .. } => session_id.as_deref(),
+            TranscriptEntry::Assistant { session_id, .. } => session_id.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Get the UUID if available
+    pub fn uuid(&self) -> Option<&str> {
+        match self {
+            TranscriptEntry::User { uuid, .. } => Some(uuid),
+            TranscriptEntry::Assistant { uuid, .. } => Some(uuid),
+            _ => None,
+        }
+    }
+
+    /// Get the timestamp if available
+    pub fn timestamp(&self) -> Option<&str> {
+        match self {
+            TranscriptEntry::User { timestamp, .. } => timestamp.as_deref(),
+            TranscriptEntry::Assistant { timestamp, .. } => timestamp.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Check if this is a user message
+    pub fn is_user(&self) -> bool {
+        matches!(self, TranscriptEntry::User { .. })
+    }
+
+    /// Check if this is an assistant message
+    pub fn is_assistant(&self) -> bool {
+        matches!(self, TranscriptEntry::Assistant { .. })
+    }
+
+    /// Check if this is a conversation message (user or assistant)
+    pub fn is_message(&self) -> bool {
+        self.is_user() || self.is_assistant()
+    }
+
+    /// Extract text content from user message
+    pub fn user_text(&self) -> Option<String> {
+        match self {
+            TranscriptEntry::User { message, .. } => match &message.content {
+                UserContent::Text(text) => Some(text.clone()),
+                UserContent::Blocks(blocks) => {
+                    let texts: Vec<&str> = blocks
+                        .iter()
+                        .filter(|b| b.block_type == "text")
+                        .filter_map(|b| b.text.as_deref())
+                        .collect();
+                    if texts.is_empty() {
+                        None
+                    } else {
+                        Some(texts.join("\n"))
+                    }
+                }
+            },
+            _ => None,
+        }
+    }
+
+    /// Extract text content from assistant message (excludes thinking)
+    pub fn assistant_text(&self) -> Option<String> {
+        match self {
+            TranscriptEntry::Assistant { message, .. } => {
+                let texts: Vec<&str> = message
+                    .content
+                    .iter()
+                    .filter(|b| b.block_type == "text")
+                    .filter_map(|b| b.text.as_deref())
+                    .collect();
+                if texts.is_empty() {
+                    None
+                } else {
+                    Some(texts.join("\n"))
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Get the text content regardless of role
+    pub fn text_content(&self) -> Option<String> {
+        self.user_text().or_else(|| self.assistant_text())
+    }
+}

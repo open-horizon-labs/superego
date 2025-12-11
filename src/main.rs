@@ -1,4 +1,7 @@
 use clap::{Parser, Subcommand};
+use std::path::Path;
+
+mod transcript;
 
 #[derive(Parser)]
 #[command(name = "sg")]
@@ -75,7 +78,30 @@ fn main() {
             println!("sg init - not yet implemented");
         }
         Commands::Evaluate { transcript_path } => {
-            println!("sg evaluate --transcript-path {} - not yet implemented", transcript_path);
+            let path = Path::new(&transcript_path);
+            match transcript::read_transcript(path) {
+                Ok(entries) => {
+                    let messages: Vec<_> = entries.iter().filter(|e| e.is_message()).collect();
+                    let session_id = transcript::extract_session_id(&entries);
+
+                    println!("Transcript loaded: {} entries, {} messages", entries.len(), messages.len());
+                    if let Some(sid) = session_id {
+                        println!("Session ID: {}", sid);
+                    }
+
+                    // Show recent context
+                    println!("\n--- Recent context (last 5 messages) ---");
+                    let context = transcript::format_recent_context(&entries, 5);
+                    println!("{}", context);
+
+                    // TODO: Call superego LLM for phase evaluation
+                    println!("sg evaluate - phase inference not yet implemented");
+                }
+                Err(e) => {
+                    eprintln!("Error reading transcript: {}", e);
+                    std::process::exit(1);
+                }
+            }
         }
         Commands::Check { tool_name } => {
             println!("sg check --tool-name {} - not yet implemented", tool_name);
