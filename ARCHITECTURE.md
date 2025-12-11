@@ -2,9 +2,26 @@
 
 > Metacognitive advisor for Claude Code - watches conversations, gates actions by phase.
 
-## Core Principle
+## Core Principles
 
-**Phase transitions are user-gated.** Claude's actions cannot change the phase - only user messages can. This enables:
+### 1. Transparent When Aligned
+
+**Superego is invisible when everyone agrees.** The ideal session:
+
+```
+User: "Add JWT auth to the login endpoint"
+Claude: *explores code* "Should I use RS256 or HS256?"
+User: "RS256, store keys in env vars"
+Superego: *detects confirmation* → phase = READY
+Claude: *writes code freely*
+User: *never sees superego*
+```
+
+Friction only appears when warranted - when Claude would jump ahead without user confirmation. Superego is a **safety net**, not a speed bump.
+
+### 2. Phase Transitions Are User-Gated
+
+Claude's actions cannot change the phase - only user messages can. This enables:
 - One LLM evaluation per user turn (not per tool call)
 - Instant tool gating against cached phase
 - Clean separation of evaluation vs enforcement
