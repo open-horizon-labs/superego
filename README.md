@@ -8,12 +8,13 @@ When you use Claude Code with superego enabled:
 
 1. **Session starts** - Claude is told superego is active and to take feedback seriously
 2. **Claude works** - You interact normally with Claude
-3. **Before Claude finishes** - Superego evaluates the conversation using an LLM
-4. **If concerns found** - Claude is blocked from stopping and shown the feedback
-5. **Claude continues** - Incorporates feedback, may ask you clarifying questions
-6. **Clean exit** - Once addressed (or no concerns), Claude finishes normally
+3. **Before large edits** - Superego evaluates proposed changes in context (Edit/Write over 20 lines)
+4. **Before Claude finishes** - Superego evaluates the full conversation
+5. **If concerns found** - Claude is blocked and shown the feedback
+6. **Claude continues** - Incorporates feedback, may ask you clarifying questions
+7. **Clean exit** - Once addressed (or no concerns), Claude finishes normally
 
-This creates a feedback loop where Claude can course-correct before presenting results to you.
+This creates feedback loops where Claude can course-correct both during work and before presenting results.
 
 ## Quickstart
 
@@ -84,11 +85,23 @@ Edit `.superego/prompt.md` to customize what superego evaluates:
 - Adjust strictness
 - Focus on particular concerns
 
+### Environment Variables
+
+- `SUPEREGO_DISABLED=1` - Disable superego entirely
+- `SUPEREGO_CHANGE_THRESHOLD=N` - Lines required to trigger PreToolUse evaluation (default: 20)
+
 ## How It Works
 
 ```
 SessionStart hook
     └── Injects contract: "SUPEREGO ACTIVE: critically evaluate feedback..."
+
+PreToolUse hook (before Edit/Write)
+    ├── Checks change size (lines added/modified)
+    ├── If >= threshold (default 20): runs sg evaluate-llm with pending change
+    ├── If concerns: returns {"decision":"block","reason":"SUPEREGO FEEDBACK: ..."}
+    │   └── Claude sees feedback, reconsiders the change
+    └── If small or clean: allows tool execution
 
 Stop hook (when Claude tries to finish)
     ├── Runs sg evaluate-llm

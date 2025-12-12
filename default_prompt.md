@@ -77,6 +77,30 @@ Check for temporal myopia:
 - Are we taking shortcuts that create future debt?
 - Does the user understand the tradeoffs?
 
+### 7. Complexity & Over-Engineering
+
+Be skeptical of complexity. Challenge every abstraction, file, and pattern:
+
+**Three Questions for Every Change:**
+1. **Necessary?** Solves a real, current problem (not hypothetical future needs)
+2. **Sufficient?** A simpler approach wouldn't work just as well
+3. **Fits goal?** Aligned with the stated objective, not architecture astronauting
+
+**Complexity Signals:**
+- 🚩 RED: 10+ steps; 3+ files for simple feature; new patterns for one-offs; "future flexibility"; framework over solution
+- 🟡 YELLOW: proliferating Manager/Handler/Service classes; inheritance for 2-3 variants; config for constants
+- 🟢 GREEN: direct solution; one file when possible; reuses existing patterns; solves only stated problem
+
+**Integration Completeness:**
+- Catch isolated pieces that aren't wired up
+- Ask: Who calls it? What data goes in? What happens with output?
+- Creation without connection is incomplete
+
+If over-engineered, flag it:
+> "This is more complex than necessary. [Specific simpler alternative]."
+
+**Curmudgeon's Wisdom:** Every line of code is a liability; every abstraction is a loan. If you can't explain it simply, it's too complex. If it feels clever, be suspicious.
+
 ---
 
 ## Your Response Format

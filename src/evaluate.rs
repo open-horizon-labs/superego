@@ -117,14 +117,29 @@ pub fn evaluate_llm(
         Err(_) => String::new(), // bd not initialized, skip context
     };
 
-    // Build message for superego - include bd context
+    // Check for pending change context (from PreToolUse hook)
+    let pending_change_path = superego_dir.join("pending_change.txt");
+    let pending_change = if pending_change_path.exists() {
+        fs::read_to_string(&pending_change_path).unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    let pending_context = if !pending_change.is_empty() {
+        format!("\n--- PENDING CHANGE (evaluate this!) ---\n{}\n--- END PENDING CHANGE ---\n", pending_change)
+    } else {
+        String::new()
+    };
+
+    // Build message for superego - include bd context and pending change
     let message = format!(
         "Review the following Claude Code conversation and provide feedback.\n\n\
         {}--- CONVERSATION ---\n\
         {}\n\
-        --- END CONVERSATION ---",
+        --- END CONVERSATION ---{}",
         bd_context,
-        context
+        context,
+        pending_context
     );
 
     // Load superego session ID if available

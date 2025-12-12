@@ -17,6 +17,7 @@ const DEFAULT_PROMPT: &str = include_str!("../default_prompt.md");
 /// Embedded hook scripts
 const EVALUATE_HOOK: &str = include_str!("../hooks/evaluate.sh");
 const SESSION_START_HOOK: &str = include_str!("../hooks/session-start.sh");
+const PRE_TOOL_USE_HOOK: &str = include_str!("../hooks/pre-tool-use.sh");
 
 /// Error type for initialization
 #[derive(Debug)]
@@ -103,15 +104,18 @@ fn setup_hooks(base_dir: &Path) -> Result<(), InitError> {
     // Write hook scripts
     let evaluate_path = hooks_dir.join("evaluate.sh");
     let session_start_path = hooks_dir.join("session-start.sh");
+    let pre_tool_use_path = hooks_dir.join("pre-tool-use.sh");
 
     fs::write(&evaluate_path, EVALUATE_HOOK)?;
     fs::write(&session_start_path, SESSION_START_HOOK)?;
+    fs::write(&pre_tool_use_path, PRE_TOOL_USE_HOOK)?;
 
     // Make executable on Unix
     #[cfg(unix)]
     {
         fs::set_permissions(&evaluate_path, fs::Permissions::from_mode(0o755))?;
         fs::set_permissions(&session_start_path, fs::Permissions::from_mode(0o755))?;
+        fs::set_permissions(&pre_tool_use_path, fs::Permissions::from_mode(0o755))?;
     }
 
     // Update .claude/settings.json
@@ -126,6 +130,7 @@ fn setup_hooks(base_dir: &Path) -> Result<(), InitError> {
     // Build hook config with absolute paths
     let evaluate_abs = fs::canonicalize(&evaluate_path)?;
     let session_start_abs = fs::canonicalize(&session_start_path)?;
+    let pre_tool_use_abs = fs::canonicalize(&pre_tool_use_path)?;
 
     let superego_hook = |path: &Path| -> Value {
         json!({
@@ -146,6 +151,7 @@ fn setup_hooks(base_dir: &Path) -> Result<(), InitError> {
         ("Stop", &evaluate_abs),
         ("PreCompact", &evaluate_abs),
         ("SessionStart", &session_start_abs),
+        ("PreToolUse", &pre_tool_use_abs),
     ] {
         let entry = superego_hook(hook_path);
 
@@ -222,6 +228,7 @@ mod tests {
         // Check hook scripts exist
         assert!(dir.path().join(".claude/hooks/superego/evaluate.sh").exists());
         assert!(dir.path().join(".claude/hooks/superego/session-start.sh").exists());
+        assert!(dir.path().join(".claude/hooks/superego/pre-tool-use.sh").exists());
 
         // Check settings.json exists and has hooks
         let settings_path = dir.path().join(".claude/settings.json");
@@ -233,6 +240,7 @@ mod tests {
         assert!(settings["hooks"]["Stop"].is_array());
         assert!(settings["hooks"]["PreCompact"].is_array());
         assert!(settings["hooks"]["SessionStart"].is_array());
+        assert!(settings["hooks"]["PreToolUse"].is_array());
     }
 
     #[test]

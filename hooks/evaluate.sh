@@ -74,7 +74,8 @@ if [ -s ".superego/feedback" ]; then
 $FEEDBACK"
 
     # Output block decision - Claude will see the reason and continue
-    OUTPUT=$(jq -n --arg reason "$REASON" '{"decision":"block","reason":$reason}')
+    # suppressOutput hides from user display, reason still goes to Claude
+    OUTPUT=$(jq -n --arg reason "$REASON" '{"decision":"block","reason":$reason,"suppressOutput":true}')
     log "Outputting: $OUTPUT"
     echo "$OUTPUT"
 else
