@@ -154,7 +154,7 @@ cargo publish --allow-dirty || error "Failed to publish to crates.io"
 
 # Step 9: Commit formula update
 log "Committing formula update..."
-git add "$FORMULA"
+git add "$FORMULA" Cargo.lock
 git commit -m "Update Homebrew formula for $TAG"
 git push origin "$BRANCH"
 
