@@ -141,12 +141,24 @@ fn setup_hooks(base_dir: &Path) -> Result<(), InitError> {
         })
     };
 
+    // Hook with matcher (for PermissionRequest filtering)
+    let superego_hook_with_matcher = |path: &Path, matcher: &str| -> Value {
+        json!({
+            "matcher": matcher,
+            "hooks": [{
+                "type": "command",
+                "command": path.to_string_lossy()
+            }]
+        })
+    };
+
     // Ensure hooks object exists
     if settings.get("hooks").is_none() {
         settings["hooks"] = json!({});
     }
 
     // Append superego hooks to existing hooks (don't overwrite)
+    // Regular hooks (no matcher)
     for (hook_name, hook_path) in [
         ("Stop", &evaluate_abs),
         ("PreCompact", &evaluate_abs),
@@ -158,6 +170,33 @@ fn setup_hooks(base_dir: &Path) -> Result<(), InitError> {
         if let Some(existing) = settings["hooks"].get_mut(hook_name) {
             if let Some(arr) = existing.as_array_mut() {
                 // Check if superego hook already exists (by command path)
+                let already_exists = arr.iter().any(|h| {
+                    h.get("hooks")
+                        .and_then(|hs| hs.as_array())
+                        .and_then(|hs| hs.first())
+                        .and_then(|h| h.get("command"))
+                        .and_then(|c| c.as_str())
+                        .map(|c| c.contains("superego"))
+                        .unwrap_or(false)
+                });
+                if !already_exists {
+                    arr.push(entry);
+                }
+            }
+        } else {
+            settings["hooks"][hook_name] = json!([entry]);
+        }
+    }
+
+    // Add PermissionRequest hook for ExitPlanMode (requires matcher)
+    // AIDEV-NOTE: ExitPlanMode triggers a permission request, not a Stop event,
+    // so we need this hook to evaluate before Claude exits plan mode.
+    {
+        let hook_name = "PermissionRequest";
+        let entry = superego_hook_with_matcher(&evaluate_abs, "ExitPlanMode");
+
+        if let Some(existing) = settings["hooks"].get_mut(hook_name) {
+            if let Some(arr) = existing.as_array_mut() {
                 let already_exists = arr.iter().any(|h| {
                     h.get("hooks")
                         .and_then(|hs| hs.as_array())
@@ -241,6 +280,17 @@ mod tests {
         assert!(settings["hooks"]["PreCompact"].is_array());
         assert!(settings["hooks"]["SessionStart"].is_array());
         assert!(settings["hooks"]["PreToolUse"].is_array());
+        assert!(settings["hooks"]["PermissionRequest"].is_array());
+
+        // Check PermissionRequest has ExitPlanMode matcher
+        let perm_hooks = settings["hooks"]["PermissionRequest"].as_array().unwrap();
+        let has_exit_plan_mode = perm_hooks.iter().any(|h| {
+            h.get("matcher")
+                .and_then(|m| m.as_str())
+                .map(|m| m == "ExitPlanMode")
+                .unwrap_or(false)
+        });
+        assert!(has_exit_plan_mode, "PermissionRequest hook should have ExitPlanMode matcher");
     }
 
     #[test]
