@@ -68,11 +68,15 @@ if [ -s ".superego/feedback" ]; then
     # Clear feedback file since we're delivering it now
     rm -f .superego/feedback
 
-    # Escape feedback for JSON
-    ESCAPED_FEEDBACK=$(echo "$FEEDBACK" | jq -Rs '.')
+    # Build properly escaped JSON using jq
+    REASON="SUPEREGO FEEDBACK: Please critically evaluate this feedback. If you agree, incorporate it. If you disagree on non-trivial points, escalate to the user.
+
+$FEEDBACK"
 
     # Output block decision - Claude will see the reason and continue
-    echo "{\"decision\":\"block\",\"reason\":\"SUPEREGO FEEDBACK: Please critically evaluate this feedback. If you agree, incorporate it. If you disagree on non-trivial points, escalate to the user.\n\n${FEEDBACK}\"}"
+    OUTPUT=$(jq -n --arg reason "$REASON" '{"decision":"block","reason":$reason}')
+    log "Outputting: $OUTPUT"
+    echo "$OUTPUT"
 else
     log "No concerns, allowing stop"
 fi
