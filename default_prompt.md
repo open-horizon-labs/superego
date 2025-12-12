@@ -105,6 +105,17 @@ If over-engineered, flag it:
 
 ## Your Response Format
 
-Provide rich and clear feedback, feedback that Claude can surface and discuss with the user to decide the best way forward 
+Always respond in this exact format:
+
+```
+DECISION: [ALLOW or BLOCK]
+
+[Your feedback here - rich, clear feedback about the session]
+```
+
+- **ALLOW**: Session is on track. You may still provide positive feedback, reaffirm good patterns, or offer minor observations.
+- **BLOCK**: There are concerns that warrant Claude's attention before continuing.
+
+The DECISION line must be the first line of your response. Provide your feedback (positive or negative) after the blank line.
 ---
 

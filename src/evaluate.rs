@@ -63,6 +63,58 @@ pub struct LlmEvaluationResult {
     pub session_id: String,
 }
 
+/// Parse the structured decision response from the LLM
+///
+/// Expected format:
+/// ```
+/// DECISION: ALLOW|BLOCK
+///
+/// <feedback text>
+/// ```
+///
+/// Returns (has_concerns, feedback_text)
+/// AIDEV-NOTE: If parsing fails, defaults to BLOCK to be safe.
+fn parse_decision_response(response: &str) -> (bool, String) {
+    let lines: Vec<&str> = response.lines().collect();
+
+    if lines.is_empty() {
+        return (true, response.to_string()); // Default to block if empty
+    }
+
+    let first_line = lines[0].trim();
+
+    // Check for DECISION: prefix
+    if let Some(decision_part) = first_line.strip_prefix("DECISION:") {
+        let decision = decision_part.trim().to_uppercase();
+
+        // Extract feedback (everything after the first line, skipping blank lines)
+        let feedback: String = lines[1..]
+            .iter()
+            .skip_while(|l| l.trim().is_empty())
+            .cloned()
+            .collect::<Vec<&str>>()
+            .join("\n")
+            .trim()
+            .to_string();
+
+        match decision.as_str() {
+            "ALLOW" => (false, feedback),
+            "BLOCK" => (true, feedback),
+            _ => {
+                // Unknown decision, default to block
+                eprintln!("Warning: Unknown decision '{}', defaulting to BLOCK", decision);
+                (true, feedback)
+            }
+        }
+    } else {
+        // No DECISION prefix found - legacy format or malformed
+        // Fall back to old behavior: check for "No concerns"
+        let has_concerns = !response.eq_ignore_ascii_case("no concerns.")
+            && !response.eq_ignore_ascii_case("no concerns");
+        (has_concerns, response.to_string())
+    }
+}
+
 /// Evaluate conversation using LLM with natural language feedback
 ///
 /// AIDEV-NOTE: This calls Claude with the superego prompt and gets
@@ -167,10 +219,9 @@ pub fn evaluate_llm(
         eprintln!("Warning: failed to update state: {}", e);
     }
 
-    // The result is natural language feedback
-    let feedback = response.result.trim().to_string();
-    let has_concerns = !feedback.eq_ignore_ascii_case("no concerns.")
-        && !feedback.eq_ignore_ascii_case("no concerns");
+    // Parse the structured response: "DECISION: ALLOW|BLOCK\n\n<feedback>"
+    let response_text = response.result.trim();
+    let (has_concerns, feedback) = parse_decision_response(response_text);
 
     // Write to feedback queue and decision journal if there are concerns
     if has_concerns {
@@ -193,4 +244,71 @@ pub fn evaluate_llm(
         cost_usd: response.total_cost_usd,
         session_id: response.session_id,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_decision_allow() {
+        let response = "DECISION: ALLOW\n\nGreat work! The code follows good patterns.";
+        let (has_concerns, feedback) = parse_decision_response(response);
+        assert!(!has_concerns);
+        assert_eq!(feedback, "Great work! The code follows good patterns.");
+    }
+
+    #[test]
+    fn test_parse_decision_block() {
+        let response = "DECISION: BLOCK\n\nThis may be a local maximum. Have alternatives been considered?";
+        let (has_concerns, feedback) = parse_decision_response(response);
+        assert!(has_concerns);
+        assert_eq!(feedback, "This may be a local maximum. Have alternatives been considered?");
+    }
+
+    #[test]
+    fn test_parse_decision_case_insensitive() {
+        let response = "DECISION: allow\n\nLooks good.";
+        let (has_concerns, _) = parse_decision_response(response);
+        assert!(!has_concerns);
+
+        let response = "DECISION: Block\n\nConcern here.";
+        let (has_concerns, _) = parse_decision_response(response);
+        assert!(has_concerns);
+    }
+
+    #[test]
+    fn test_parse_decision_multiline_feedback() {
+        let response = "DECISION: BLOCK\n\nFirst concern.\n\nSecond concern.\n\n- Bullet point";
+        let (has_concerns, feedback) = parse_decision_response(response);
+        assert!(has_concerns);
+        assert!(feedback.contains("First concern."));
+        assert!(feedback.contains("Second concern."));
+        assert!(feedback.contains("- Bullet point"));
+    }
+
+    #[test]
+    fn test_parse_decision_legacy_no_concerns() {
+        // Legacy format should still work
+        let response = "No concerns.";
+        let (has_concerns, feedback) = parse_decision_response(response);
+        assert!(!has_concerns);
+        assert_eq!(feedback, "No concerns.");
+    }
+
+    #[test]
+    fn test_parse_decision_legacy_with_concerns() {
+        // Legacy format - any other text means concerns
+        let response = "The code has a bug.";
+        let (has_concerns, feedback) = parse_decision_response(response);
+        assert!(has_concerns);
+        assert_eq!(feedback, "The code has a bug.");
+    }
+
+    #[test]
+    fn test_parse_decision_unknown_defaults_to_block() {
+        let response = "DECISION: MAYBE\n\nNot sure about this.";
+        let (has_concerns, _) = parse_decision_response(response);
+        assert!(has_concerns); // Unknown decision defaults to block
+    }
 }
