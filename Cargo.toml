@@ -1,7 +1,16 @@
 [package]
 name = "sg"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "Superego - Metacognitive advisor for Claude Code"
+license = "MIT"
+repository = "https://github.com/OWNER/higher-peak"  # TODO: Update when repo created
+keywords = ["claude", "ai", "cli", "metacognition"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "sg"
+path = "src/main.rs"
 
 [dependencies]
 chrono = { version = "0.4.42", features = ["serde"] }
