@@ -81,11 +81,10 @@ fn main() {
         Commands::Init { force } => {
             match init::init(force) {
                 Ok(()) => {
-                    println!("Superego initialized in .superego/");
-                    println!("  - prompt.md: system prompt (customize as needed)");
-                    println!("  - state.json: override/disabled state");
-                    println!("  - decisions/: decision journal");
-                    println!("\nNext: configure hooks in .claude/settings.json");
+                    println!("Superego initialized:");
+                    println!("  .superego/prompt.md   - system prompt (customize as needed)");
+                    println!("  .claude/settings.json - hooks configured");
+                    println!("\nReady to use. Superego will evaluate after each Claude response.");
                 }
                 Err(init::InitError::AlreadyExists) => {
                     eprintln!(".superego/ already exists. Use --force to reinitialize.");
