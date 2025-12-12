@@ -17,6 +17,7 @@ const DEFAULT_PROMPT: &str = include_str!("../default_prompt.md");
 /// Embedded hook scripts
 const EVALUATE_HOOK: &str = include_str!("../hooks/evaluate.sh");
 const USER_PROMPT_SUBMIT_HOOK: &str = include_str!("../hooks/user-prompt-submit.sh");
+const SESSION_START_HOOK: &str = include_str!("../hooks/session-start.sh");
 
 /// Error type for initialization
 #[derive(Debug)]
@@ -103,15 +104,18 @@ fn setup_hooks(base_dir: &Path) -> Result<(), InitError> {
     // Write hook scripts
     let evaluate_path = hooks_dir.join("evaluate.sh");
     let user_prompt_path = hooks_dir.join("user-prompt-submit.sh");
+    let session_start_path = hooks_dir.join("session-start.sh");
 
     fs::write(&evaluate_path, EVALUATE_HOOK)?;
     fs::write(&user_prompt_path, USER_PROMPT_SUBMIT_HOOK)?;
+    fs::write(&session_start_path, SESSION_START_HOOK)?;
 
     // Make executable on Unix
     #[cfg(unix)]
     {
         fs::set_permissions(&evaluate_path, fs::Permissions::from_mode(0o755))?;
         fs::set_permissions(&user_prompt_path, fs::Permissions::from_mode(0o755))?;
+        fs::set_permissions(&session_start_path, fs::Permissions::from_mode(0o755))?;
     }
 
     // Update .claude/settings.json
@@ -126,6 +130,7 @@ fn setup_hooks(base_dir: &Path) -> Result<(), InitError> {
     // Build hook config with absolute paths
     let evaluate_abs = fs::canonicalize(&evaluate_path)?;
     let user_prompt_abs = fs::canonicalize(&user_prompt_path)?;
+    let session_start_abs = fs::canonicalize(&session_start_path)?;
 
     let superego_hook = |path: &Path| -> Value {
         json!({
@@ -146,6 +151,7 @@ fn setup_hooks(base_dir: &Path) -> Result<(), InitError> {
         ("Stop", &evaluate_abs),
         ("PreCompact", &evaluate_abs),
         ("UserPromptSubmit", &user_prompt_abs),
+        ("SessionStart", &session_start_abs),
     ] {
         let entry = superego_hook(hook_path);
 

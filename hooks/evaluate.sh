@@ -2,8 +2,8 @@
 # Superego evaluation hook
 # Used by: Stop (after response), PreCompact (before context truncation)
 #
-# AIDEV-NOTE: Single script for all evaluation triggers. Evaluates
-# everything since last_evaluated timestamp.
+# AIDEV-NOTE: For Stop hooks, if concerns found and not already blocked once,
+# returns {"decision":"block","reason":"..."} so Claude sees feedback and continues.
 
 # Debug log function
 log() {
@@ -26,6 +26,13 @@ fi
 
 log "Hook fired"
 
+# Check if stop hook already active (prevent infinite loop)
+STOP_HOOK_ACTIVE=$(echo "$INPUT" | jq -r '.stop_hook_active // false')
+if [ "$STOP_HOOK_ACTIVE" = "true" ]; then
+    log "SKIP: stop_hook_active=true (already blocked once)"
+    exit 0
+fi
+
 # Extract transcript path from hook input
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // .transcriptPath // ""')
 
@@ -41,10 +48,33 @@ if [[ "$TRANSCRIPT_PATH" == *".superego"* ]]; then
     exit 0
 fi
 
-# Run LLM evaluation
+# Run LLM evaluation and capture output
 log "Running: sg evaluate-llm"
-sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" >> .superego/hook.log 2>&1 || log "ERROR: sg evaluate-llm failed"
-log "Done"
+RESULT=$(sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" 2>> .superego/hook.log)
+EXIT_CODE=$?
 
-# Always exit 0 - evaluation shouldn't block Claude from stopping
+if [ $EXIT_CODE -ne 0 ]; then
+    log "ERROR: sg evaluate-llm failed with code $EXIT_CODE"
+    exit 0
+fi
+
+log "Evaluation complete"
+
+# Check if there's feedback to deliver (file exists and non-empty)
+if [ -s ".superego/feedback" ]; then
+    FEEDBACK=$(cat .superego/feedback)
+    log "Blocking with feedback: ${FEEDBACK:0:100}..."
+
+    # Clear feedback file since we're delivering it now
+    rm -f .superego/feedback
+
+    # Escape feedback for JSON
+    ESCAPED_FEEDBACK=$(echo "$FEEDBACK" | jq -Rs '.')
+
+    # Output block decision - Claude will see the reason and continue
+    echo "{\"decision\":\"block\",\"reason\":\"SUPEREGO FEEDBACK: Please critically evaluate this feedback. If you agree, incorporate it. If you disagree on non-trivial points, escalate to the user.\n\n${FEEDBACK}\"}"
+else
+    log "No concerns, allowing stop"
+fi
+
 exit 0
