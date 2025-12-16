@@ -1,5 +1,6 @@
 /target
 
-# Superego
+# Superego (machine-specific paths)
 .superego/
 .claude/hooks/superego/
+.claude/settings.json

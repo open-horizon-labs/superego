@@ -228,8 +228,8 @@ fn setup_hooks(base_dir: &Path) -> Result<(), InitError> {
 /// Update .gitignore to exclude superego files
 fn update_gitignore(base_dir: &Path) -> Result<(), InitError> {
     let gitignore_path = base_dir.join(".gitignore");
-    let marker = "# Superego";
-    let entries = ".superego/\n.claude/hooks/superego/";
+    let marker = "# Superego (machine-specific paths)";
+    let entries = ".superego/\n.claude/hooks/superego/\n.claude/settings.json";
 
     if gitignore_path.exists() {
         let content = fs::read_to_string(&gitignore_path)?;
