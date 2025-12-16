@@ -23,15 +23,38 @@ if [ ! -d ".superego" ]; then
     exit 0
 fi
 
+# Extract session ID for namespacing
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // ""')
+
+# Build session-namespaced paths
+if [ -n "$SESSION_ID" ] && [ "$SESSION_ID" != "null" ]; then
+    SESSION_DIR=".superego/sessions/$SESSION_ID"
+    mkdir -p "$SESSION_DIR"
+    FEEDBACK_PATH="$SESSION_DIR/feedback"
+else
+    SESSION_ID=""
+    FEEDBACK_PATH=".superego/feedback"
+fi
+
 # --- Periodic eval check (catch drift from many small changes) ---
-if sg should-eval 2>/dev/null; then
+if [ -n "$SESSION_ID" ]; then
+    SHOULD_EVAL=$(sg should-eval --session-id "$SESSION_ID" 2>/dev/null && echo "yes" || echo "no")
+else
+    SHOULD_EVAL=$(sg should-eval 2>/dev/null && echo "yes" || echo "no")
+fi
+
+if [ "$SHOULD_EVAL" = "yes" ]; then
     log "Periodic eval triggered (time threshold)"
     TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // ""')
     if [ -n "$TRANSCRIPT_PATH" ] && [ "$TRANSCRIPT_PATH" != "null" ]; then
-        sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" 2>> .superego/hook.log
-        if [ -s ".superego/feedback" ]; then
-            FEEDBACK=$(cat .superego/feedback)
-            rm -f .superego/feedback
+        if [ -n "$SESSION_ID" ]; then
+            sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" --session-id "$SESSION_ID" 2>> .superego/hook.log
+        else
+            sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" 2>> .superego/hook.log
+        fi
+        if [ -s "$FEEDBACK_PATH" ]; then
+            FEEDBACK=$(cat "$FEEDBACK_PATH")
+            rm -f "$FEEDBACK_PATH"
             log "Periodic eval blocking: ${FEEDBACK:0:100}..."
             REASON="SUPEREGO FEEDBACK (periodic check):
 
@@ -101,15 +124,25 @@ if [ -z "$TRANSCRIPT_PATH" ] || [ "$TRANSCRIPT_PATH" = "null" ]; then
     exit 0
 fi
 
-# Write pending change context to file for sg evaluate-llm to include
-echo "$CHANGE_CONTEXT" > .superego/pending_change.txt
+# Write pending change context to file for sg evaluate-llm to include (session-namespaced)
+if [ -n "$SESSION_ID" ]; then
+    PENDING_CHANGE_PATH="$SESSION_DIR/pending_change.txt"
+else
+    PENDING_CHANGE_PATH=".superego/pending_change.txt"
+fi
+echo "$CHANGE_CONTEXT" > "$PENDING_CHANGE_PATH"
 
 # Run evaluation with transcript context
-log "Running: sg evaluate-llm with pending change"
-RESULT=$(sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" 2>> .superego/hook.log)
+if [ -n "$SESSION_ID" ]; then
+    log "Running: sg evaluate-llm --session-id $SESSION_ID with pending change"
+    RESULT=$(sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" --session-id "$SESSION_ID" 2>> .superego/hook.log)
+else
+    log "Running: sg evaluate-llm with pending change"
+    RESULT=$(sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" 2>> .superego/hook.log)
+fi
 EXIT_CODE=$?
 
-rm -f .superego/pending_change.txt
+rm -f "$PENDING_CHANGE_PATH"
 
 if [ $EXIT_CODE -ne 0 ]; then
     log "ERROR: sg evaluate-llm failed with code $EXIT_CODE"
@@ -119,11 +152,11 @@ fi
 log "Evaluation complete"
 
 # Check if there's feedback
-if [ -s ".superego/feedback" ]; then
-    FEEDBACK=$(cat .superego/feedback)
+if [ -s "$FEEDBACK_PATH" ]; then
+    FEEDBACK=$(cat "$FEEDBACK_PATH")
     log "Blocking with feedback: ${FEEDBACK:0:100}..."
 
-    rm -f .superego/feedback
+    rm -f "$FEEDBACK_PATH"
 
     REASON="SUPEREGO FEEDBACK on proposed $TOOL_NAME to $FILE_PATH:
 

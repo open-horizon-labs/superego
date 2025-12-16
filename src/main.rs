@@ -71,10 +71,17 @@ enum Commands {
         /// Path to the transcript JSONL file
         #[arg(long)]
         transcript_path: String,
+        /// Claude session ID (for per-session state isolation)
+        #[arg(long)]
+        session_id: Option<String>,
     },
 
     /// Check if periodic evaluation is due (for hooks)
-    ShouldEval,
+    ShouldEval {
+        /// Claude session ID (for per-session state isolation)
+        #[arg(long)]
+        session_id: Option<String>,
+    },
 }
 
 fn main() {
@@ -111,8 +118,8 @@ fn main() {
                 std::process::exit(1);
             }
 
-            // Run LLM evaluation
-            match evaluate::evaluate_llm(transcript, superego_dir) {
+            // Run LLM evaluation (no session_id for legacy command)
+            match evaluate::evaluate_llm(transcript, superego_dir, None) {
                 Ok(result) => {
                     println!(
                         r#"{{"has_concerns": {}, "cost_usd": {:.6}}}"#,
@@ -254,7 +261,7 @@ fn main() {
         Commands::Enable => {
             println!("sg enable - not yet implemented");
         }
-        Commands::EvaluateLlm { transcript_path } => {
+        Commands::EvaluateLlm { transcript_path, session_id } => {
             let transcript = Path::new(&transcript_path);
             let superego_dir = Path::new(".superego");
 
@@ -265,7 +272,7 @@ fn main() {
             }
 
             // Run LLM evaluation
-            match evaluate::evaluate_llm(transcript, superego_dir) {
+            match evaluate::evaluate_llm(transcript, superego_dir, session_id.as_deref()) {
                 Ok(result) => {
                     // Output for hook/debugging
                     println!(
@@ -287,7 +294,7 @@ fn main() {
                 }
             }
         }
-        Commands::ShouldEval => {
+        Commands::ShouldEval { session_id } => {
             let superego_dir = Path::new(".superego");
 
             // Check if superego is initialized
@@ -296,8 +303,15 @@ fn main() {
                 std::process::exit(1);
             }
 
+            // Use session-namespaced state dir if session_id provided
+            let state_dir = if let Some(ref sid) = session_id {
+                superego_dir.join("sessions").join(sid)
+            } else {
+                superego_dir.to_path_buf()
+            };
+
             // Read state to get last_evaluated
-            let state_mgr = state::StateManager::new(superego_dir);
+            let state_mgr = state::StateManager::new(&state_dir);
             let current_state = match state_mgr.load() {
                 Ok(s) => s,
                 Err(_) => {

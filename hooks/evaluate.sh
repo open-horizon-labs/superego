@@ -33,13 +33,23 @@ if [ "$STOP_HOOK_ACTIVE" = "true" ]; then
     exit 0
 fi
 
-# Extract transcript path from hook input
+# Extract transcript path and session ID from hook input
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // .transcriptPath // ""')
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // ""')
 
 # Skip if no transcript path
 if [ -z "$TRANSCRIPT_PATH" ] || [ "$TRANSCRIPT_PATH" = "null" ]; then
     log "SKIP: No transcript path"
     exit 0
+fi
+
+# Build session-namespaced paths
+if [ -n "$SESSION_ID" ] && [ "$SESSION_ID" != "null" ]; then
+    SESSION_DIR=".superego/sessions/$SESSION_ID"
+    mkdir -p "$SESSION_DIR"
+    FEEDBACK_PATH="$SESSION_DIR/feedback"
+else
+    FEEDBACK_PATH=".superego/feedback"
 fi
 
 # Skip if this is superego's own transcript (recursion prevention)
@@ -49,8 +59,13 @@ if [[ "$TRANSCRIPT_PATH" == *".superego"* ]]; then
 fi
 
 # Run LLM evaluation and capture output
-log "Running: sg evaluate-llm"
-RESULT=$(sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" 2>> .superego/hook.log)
+if [ -n "$SESSION_ID" ] && [ "$SESSION_ID" != "null" ]; then
+    log "Running: sg evaluate-llm --session-id $SESSION_ID"
+    RESULT=$(sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" --session-id "$SESSION_ID" 2>> .superego/hook.log)
+else
+    log "Running: sg evaluate-llm (no session_id)"
+    RESULT=$(sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" 2>> .superego/hook.log)
+fi
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -ne 0 ]; then
@@ -61,12 +76,12 @@ fi
 log "Evaluation complete"
 
 # Check if there's feedback to deliver (file exists and non-empty)
-if [ -s ".superego/feedback" ]; then
-    FEEDBACK=$(cat .superego/feedback)
+if [ -s "$FEEDBACK_PATH" ]; then
+    FEEDBACK=$(cat "$FEEDBACK_PATH")
     log "Blocking with feedback: ${FEEDBACK:0:100}..."
 
     # Clear feedback file since we're delivering it now
-    rm -f .superego/feedback
+    rm -f "$FEEDBACK_PATH"
 
     # Build properly escaped JSON using jq
     REASON="SUPEREGO FEEDBACK: Please critically evaluate this feedback. If you agree, incorporate it. If you disagree on non-trivial points, escalate to the user.

@@ -120,12 +120,26 @@ fn parse_decision_response(response: &str) -> (bool, String) {
 /// AIDEV-NOTE: This calls Claude with the superego prompt and gets
 /// rich natural language feedback that Claude can reason about.
 /// Context is everything since last_evaluated - not an arbitrary window.
+/// When session_id is provided, uses session-namespaced paths for state isolation.
 pub fn evaluate_llm(
     transcript_path: &Path,
     superego_dir: &Path,
+    session_id: Option<&str>,
 ) -> Result<LlmEvaluationResult, EvaluateError> {
-    // Load state to get last_evaluated timestamp
-    let state_mgr = StateManager::new(superego_dir);
+    // Use session-namespaced directory for state if session_id provided
+    let session_dir = if let Some(sid) = session_id {
+        superego_dir.join("sessions").join(sid)
+    } else {
+        superego_dir.to_path_buf()
+    };
+
+    // Ensure session directory exists
+    if session_id.is_some() {
+        fs::create_dir_all(&session_dir)?;
+    }
+
+    // Load state to get last_evaluated timestamp (from session dir)
+    let state_mgr = StateManager::new(&session_dir);
     let state = state_mgr.load().unwrap_or_default();
 
     // Load transcript
@@ -167,8 +181,8 @@ pub fn evaluate_llm(
         Err(_) => String::new(),
     };
 
-    // Check for pending change context (from PreToolUse hook)
-    let pending_change_path = superego_dir.join("pending_change.txt");
+    // Check for pending change context (from PreToolUse hook) - session-namespaced
+    let pending_change_path = session_dir.join("pending_change.txt");
     let pending_change = if pending_change_path.exists() {
         fs::read_to_string(&pending_change_path).unwrap_or_default()
     } else {
@@ -192,9 +206,9 @@ pub fn evaluate_llm(
         pending_context
     );
 
-    // Load superego session ID if available
-    let session_path = superego_dir.join("session").join("session_id");
-    let superego_session_id = fs::read_to_string(&session_path).ok();
+    // Load superego session ID if available (session-namespaced)
+    let superego_session_path = session_dir.join("superego_session");
+    let superego_session_id = fs::read_to_string(&superego_session_path).ok();
 
     // Call Claude
     let options = ClaudeOptions {
@@ -205,11 +219,9 @@ pub fn evaluate_llm(
 
     let response = claude::invoke(&system_prompt, &message, options)?;
 
-    // Save session ID for next time
+    // Save superego session ID for next time (session-namespaced)
     if response.session_id != superego_session_id.unwrap_or_default() {
-        let session_dir = superego_dir.join("session");
-        fs::create_dir_all(&session_dir)?;
-        fs::write(session_path, &response.session_id)?;
+        fs::write(&superego_session_path, &response.session_id)?;
     }
 
     // Update last_evaluated timestamp (reuse state_mgr from top)
@@ -221,15 +233,15 @@ pub fn evaluate_llm(
     let response_text = response.result.trim();
     let (has_concerns, feedback) = parse_decision_response(response_text);
 
-    // Write to feedback queue and decision journal if there are concerns
+    // Write to feedback queue (session-namespaced) and decision journal if there are concerns
     if has_concerns {
-        let queue = FeedbackQueue::new(superego_dir);
+        let queue = FeedbackQueue::new(&session_dir);
         let fb = Feedback::warning(&feedback);
         if let Err(e) = queue.write(&fb) {
             eprintln!("Warning: failed to write feedback: {}", e);
         }
-        // Record to decision journal for audit trail
-        let journal = Journal::new(superego_dir);
+        // Record to decision journal for audit trail (session-namespaced per user requirement)
+        let journal = Journal::new(&session_dir);
         let decision = Decision::feedback_delivered(Some(response.session_id.clone()), feedback.clone());
         if let Err(e) = journal.write(&decision) {
             eprintln!("Warning: failed to write decision journal: {}", e);
