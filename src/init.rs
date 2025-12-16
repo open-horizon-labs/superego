@@ -229,21 +229,21 @@ fn setup_hooks(base_dir: &Path) -> Result<(), InitError> {
 fn update_gitignore(base_dir: &Path) -> Result<(), InitError> {
     let gitignore_path = base_dir.join(".gitignore");
     let marker = "# Superego";
-    let entry = ".superego/";
+    let entries = ".superego/\n.claude/hooks/superego/";
 
     if gitignore_path.exists() {
         let content = fs::read_to_string(&gitignore_path)?;
-        if content.contains(entry) {
+        if content.contains(".superego/") {
             return Ok(());
         }
         let mut new_content = content;
         if !new_content.ends_with('\n') {
             new_content.push('\n');
         }
-        new_content.push_str(&format!("\n{}\n{}\n", marker, entry));
+        new_content.push_str(&format!("\n{}\n{}\n", marker, entries));
         fs::write(&gitignore_path, new_content)?;
     } else {
-        fs::write(&gitignore_path, format!("{}\n{}\n", marker, entry))?;
+        fs::write(&gitignore_path, format!("{}\n{}\n", marker, entries))?;
     }
 
     Ok(())
