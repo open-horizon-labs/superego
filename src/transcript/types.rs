@@ -79,6 +79,9 @@ pub struct AssistantContentBlock {
     pub block_type: String,
     pub text: Option<String>,
     pub thinking: Option<String>,
+    // Tool use fields
+    pub name: Option<String>,
+    pub input: Option<serde_json::Value>,
 }
 
 impl TranscriptEntry {
@@ -157,4 +160,18 @@ impl TranscriptEntry {
         }
     }
 
+    /// Extract tool uses from assistant message as (name, input_json)
+    pub fn tool_uses(&self) -> Vec<(&str, Option<&serde_json::Value>)> {
+        match self {
+            TranscriptEntry::Assistant { message, .. } => {
+                message
+                    .content
+                    .iter()
+                    .filter(|b| b.block_type == "tool_use")
+                    .filter_map(|b| Some((b.name.as_deref()?, b.input.as_ref())))
+                    .collect()
+            }
+            _ => Vec::new(),
+        }
+    }
 }

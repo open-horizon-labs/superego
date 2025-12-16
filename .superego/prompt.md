@@ -142,7 +142,7 @@ Don't just assert concerns—**evidence them**.
 
 **Gather first (tools):**
 - `git diff` - See actual code changes (not just what Claude says)
-- `git status` - See uncommitted work
+- `git status` - See what files changed
 - Read files - Understand current state
 
 **Then assess:**

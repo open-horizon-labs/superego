@@ -155,18 +155,16 @@ pub fn evaluate_llm(
     // Format conversation context
     let context = transcript::format_context(&messages);
 
-    // Get bd task context
+    // Get bd task context (only include if there IS a task - for drift detection)
     let bd_context = match bd::evaluate() {
         Ok(eval) => {
             if let Some(task) = eval.current_task {
                 format!("CURRENT TASK: {} - {}\n\n", task.id, task.title)
-            } else if eval.read_only {
-                "CURRENT TASK: None (no task claimed)\n\n".to_string()
             } else {
-                String::new()
+                String::new() // No task = no context (don't prime workflow concerns)
             }
         }
-        Err(_) => String::new(), // bd not initialized, skip context
+        Err(_) => String::new(),
     };
 
     // Check for pending change context (from PreToolUse hook)

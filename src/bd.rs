@@ -71,52 +71,22 @@ fn is_initialized() -> bool {
 /// Evaluation result based on bd state
 #[derive(Debug)]
 pub struct BdEvaluation {
-    /// Are we in read-only mode (no tasks in progress)?
-    pub read_only: bool,
-    /// Current task if any
+    /// Current task if any (for drift detection)
     pub current_task: Option<BdIssue>,
-    /// Feedback message if there's an issue
-    pub feedback: Option<String>,
 }
 
 /// Evaluate current state based on bd
 pub fn evaluate() -> Result<BdEvaluation, BdError> {
     if !is_initialized() {
-        // No bd = no constraints (for now)
-        return Ok(BdEvaluation {
-            read_only: false,
-            current_task: None,
-            feedback: None,
-        });
+        return Ok(BdEvaluation { current_task: None });
     }
 
     let tasks = get_in_progress()?;
 
-    if tasks.is_empty() {
-        Ok(BdEvaluation {
-            read_only: true,
-            current_task: None,
-            feedback: Some(
-                "No task in progress. Claim a task with `bd update <id> --status in_progress` before making changes.".to_string()
-            ),
-        })
-    } else if tasks.len() > 1 {
-        let task_list: Vec<_> = tasks.iter().map(|t| format!("{}: {}", t.id, t.title)).collect();
-        Ok(BdEvaluation {
-            read_only: false, // Allow but warn
-            current_task: Some(tasks[0].clone()),
-            feedback: Some(format!(
-                "Multiple tasks in progress ({}). Consider focusing on one at a time.",
-                task_list.join(", ")
-            )),
-        })
-    } else {
-        Ok(BdEvaluation {
-            read_only: false,
-            current_task: Some(tasks[0].clone()),
-            feedback: None,
-        })
-    }
+    // Return first in-progress task (if any) for drift detection
+    Ok(BdEvaluation {
+        current_task: tasks.into_iter().next(),
+    })
 }
 
 #[cfg(test)]

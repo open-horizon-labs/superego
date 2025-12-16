@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use regex::Regex;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -85,6 +86,34 @@ pub fn get_messages_since(
     }
 }
 
+/// Strip <system-reminder>...</system-reminder> blocks from text
+/// AIDEV-NOTE: System reminders are injected by Claude Code for workflow/context.
+/// Superego should evaluate technical decisions, not enforce workflow instructions.
+fn strip_system_reminders(text: &str) -> String {
+    let re = Regex::new(r"(?s)<system-reminder>.*?</system-reminder>").unwrap();
+    re.replace_all(text, "").trim().to_string()
+}
+
+/// Extract key identifier from tool input (file path, command, pattern)
+fn tool_summary(name: &str, input: Option<&serde_json::Value>) -> String {
+    let input = match input {
+        Some(v) => v,
+        None => return String::new(),
+    };
+    match name {
+        "Edit" | "Write" | "Read" => {
+            input.get("file_path").and_then(|v| v.as_str()).unwrap_or("").to_string()
+        }
+        "Bash" => {
+            input.get("command").and_then(|v| v.as_str()).unwrap_or("").to_string()
+        }
+        "Glob" | "Grep" => {
+            input.get("pattern").and_then(|v| v.as_str()).unwrap_or("").to_string()
+        }
+        _ => String::new(),
+    }
+}
+
 /// Format messages for context (for sending to superego LLM)
 pub fn format_context(messages: &[&TranscriptEntry]) -> String {
     let mut output = String::new();
@@ -93,22 +122,38 @@ pub fn format_context(messages: &[&TranscriptEntry]) -> String {
         match entry {
             TranscriptEntry::User { .. } => {
                 if let Some(text) = entry.user_text() {
-                    output.push_str("USER: ");
-                    output.push_str(&text);
-                    output.push_str("\n\n");
+                    let cleaned = strip_system_reminders(&text);
+                    if !cleaned.is_empty() {
+                        output.push_str("USER: ");
+                        output.push_str(&cleaned);
+                        output.push_str("\n\n");
+                    }
                 }
             }
             TranscriptEntry::Assistant { .. } => {
+                let tool_uses = entry.tool_uses();
+
+                if !tool_uses.is_empty() {
+                    output.push_str("TOOLS: ");
+                    for (name, input) in &tool_uses {
+                        output.push_str(name);
+                        let summary = tool_summary(name, *input);
+                        if !summary.is_empty() {
+                            output.push_str("(");
+                            output.push_str(&summary);
+                            output.push_str(")");
+                        }
+                        output.push_str(" ");
+                    }
+                    output.push_str("\n");
+                }
+
                 if let Some(text) = entry.assistant_text() {
                     output.push_str("ASSISTANT: ");
-                    // Truncate long assistant responses
-                    if text.len() > 500 {
-                        output.push_str(&text[..500]);
-                        output.push_str("...[truncated]");
-                    } else {
-                        output.push_str(&text);
-                    }
+                    output.push_str(&text);
                     output.push_str("\n\n");
+                } else if !tool_uses.is_empty() {
+                    output.push_str("\n");
                 }
             }
             _ => {}
@@ -144,5 +189,35 @@ mod tests {
         let json = r#"{"type":"some-new-type","data":"whatever"}"#;
         let entry: TranscriptEntry = serde_json::from_str(json).unwrap();
         assert!(matches!(entry, TranscriptEntry::Unknown));
+    }
+
+    #[test]
+    fn test_strip_system_reminders_single() {
+        let text = "Hello <system-reminder>workflow stuff</system-reminder> world";
+        assert_eq!(strip_system_reminders(text), "Hello  world");
+    }
+
+    #[test]
+    fn test_strip_system_reminders_multiple() {
+        let text = "<system-reminder>first</system-reminder>content<system-reminder>second</system-reminder>";
+        assert_eq!(strip_system_reminders(text), "content");
+    }
+
+    #[test]
+    fn test_strip_system_reminders_multiline() {
+        let text = "Question here\n<system-reminder>\nMultiple\nlines\n</system-reminder>\nMore text";
+        assert_eq!(strip_system_reminders(text), "Question here\n\nMore text");
+    }
+
+    #[test]
+    fn test_strip_system_reminders_none() {
+        let text = "Just normal text";
+        assert_eq!(strip_system_reminders(text), "Just normal text");
+    }
+
+    #[test]
+    fn test_strip_system_reminders_only_reminders() {
+        let text = "<system-reminder>only this</system-reminder>";
+        assert_eq!(strip_system_reminders(text), "");
     }
 }
