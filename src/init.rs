@@ -93,6 +93,9 @@ pub fn init_at(base_dir: &Path, force: bool) -> Result<(), InitError> {
     // Set up Claude Code hooks
     setup_hooks(base_dir)?;
 
+    // Update .gitignore
+    update_gitignore(base_dir)?;
+
     Ok(())
 }
 
@@ -218,6 +221,30 @@ fn setup_hooks(base_dir: &Path) -> Result<(), InitError> {
     // Write settings back
     let formatted = serde_json::to_string_pretty(&settings)?;
     fs::write(&settings_path, formatted)?;
+
+    Ok(())
+}
+
+/// Update .gitignore to exclude superego files
+fn update_gitignore(base_dir: &Path) -> Result<(), InitError> {
+    let gitignore_path = base_dir.join(".gitignore");
+    let marker = "# Superego";
+    let entry = ".superego/";
+
+    if gitignore_path.exists() {
+        let content = fs::read_to_string(&gitignore_path)?;
+        if content.contains(entry) {
+            return Ok(());
+        }
+        let mut new_content = content;
+        if !new_content.ends_with('\n') {
+            new_content.push('\n');
+        }
+        new_content.push_str(&format!("\n{}\n{}\n", marker, entry));
+        fs::write(&gitignore_path, new_content)?;
+    } else {
+        fs::write(&gitignore_path, format!("{}\n{}\n", marker, entry))?;
+    }
 
     Ok(())
 }
