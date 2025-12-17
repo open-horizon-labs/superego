@@ -62,6 +62,11 @@ pub struct UserContentBlock {
     #[serde(rename = "type")]
     pub block_type: String,
     pub text: Option<String>,
+    // Tool result fields
+    #[serde(rename = "tool_use_id")]
+    pub tool_use_id: Option<String>,
+    /// Tool result content can be string or structured
+    pub content: Option<serde_json::Value>,
 }
 
 /// Assistant message structure
@@ -118,6 +123,39 @@ impl TranscriptEntry {
         self.is_user() || self.is_assistant()
     }
 
+    /// Check if this is a summary
+    pub fn is_summary(&self) -> bool {
+        matches!(self, TranscriptEntry::Summary { .. })
+    }
+
+    /// Extract summary text
+    pub fn summary_text(&self) -> Option<&str> {
+        match self {
+            TranscriptEntry::Summary { summary, .. } => Some(summary.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Extract thinking content from assistant message
+    pub fn assistant_thinking(&self) -> Option<String> {
+        match self {
+            TranscriptEntry::Assistant { message, .. } => {
+                let thoughts: Vec<&str> = message
+                    .content
+                    .iter()
+                    .filter(|b| b.block_type == "thinking")
+                    .filter_map(|b| b.thinking.as_deref())
+                    .collect();
+                if thoughts.is_empty() {
+                    None
+                } else {
+                    Some(thoughts.join("\n"))
+                }
+            }
+            _ => None,
+        }
+    }
+
     /// Extract text content from user message
     pub fn user_text(&self) -> Option<String> {
         match self {
@@ -137,6 +175,31 @@ impl TranscriptEntry {
                 }
             },
             _ => None,
+        }
+    }
+
+    /// Extract tool results from user message (tool outputs returned to Claude)
+    pub fn tool_results(&self) -> Vec<(Option<&str>, String)> {
+        match self {
+            TranscriptEntry::User { message, .. } => match &message.content {
+                UserContent::Blocks(blocks) => {
+                    blocks
+                        .iter()
+                        .filter(|b| b.block_type == "tool_result")
+                        .filter_map(|b| {
+                            let content = b.content.as_ref().map(|c| {
+                                match c {
+                                    serde_json::Value::String(s) => s.clone(),
+                                    other => other.to_string(),
+                                }
+                            })?;
+                            Some((b.tool_use_id.as_deref(), content))
+                        })
+                        .collect()
+                }
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
         }
     }
 

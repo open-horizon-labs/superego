@@ -75,24 +75,28 @@ pub fn get_messages_since<'a>(
         }
     };
 
+    // Include messages AND summaries (summaries provide context after compaction)
+    let content_filter = |e: &&TranscriptEntry| e.is_message() || e.is_summary();
+
     match since {
         Some(cutoff) => {
             entries
                 .iter()
-                .filter(|e| e.is_message())
+                .filter(content_filter)
                 .filter(session_filter)
                 .filter(|e| {
                     // Include if timestamp is after cutoff (or if no timestamp)
+                    // Summaries don't have timestamps, so they pass through
                     e.timestamp()
                         .and_then(|ts| DateTime::parse_from_rfc3339(ts).ok())
                         .map(|ts| ts > cutoff)
-                        .unwrap_or(true) // Include entries without timestamps
+                        .unwrap_or(true)
                 })
                 .collect()
         }
         None => {
-            // No previous evaluation - include all messages (for this session)
-            entries.iter().filter(|e| e.is_message()).filter(session_filter).collect()
+            // No previous evaluation - include all messages + summaries (for this session)
+            entries.iter().filter(content_filter).filter(session_filter).collect()
         }
     }
 }
@@ -131,7 +135,30 @@ pub fn format_context(messages: &[&TranscriptEntry]) -> String {
 
     for entry in messages {
         match entry {
+            TranscriptEntry::Summary { .. } => {
+                if let Some(text) = entry.summary_text() {
+                    output.push_str("SUMMARY: ");
+                    output.push_str(text);
+                    output.push_str("\n\n");
+                }
+            }
             TranscriptEntry::User { .. } => {
+                // Include tool results (what Claude read/executed)
+                let tool_results = entry.tool_results();
+                if !tool_results.is_empty() {
+                    for (_id, content) in &tool_results {
+                        // Truncate large tool results to avoid token bloat
+                        let truncated = if content.len() > 500 {
+                            format!("{}...[truncated]", &content[..500])
+                        } else {
+                            content.clone()
+                        };
+                        output.push_str("TOOL_RESULT: ");
+                        output.push_str(&truncated);
+                        output.push_str("\n\n");
+                    }
+                }
+
                 if let Some(text) = entry.user_text() {
                     let cleaned = strip_system_reminders(&text);
                     if !cleaned.is_empty() {
@@ -143,6 +170,13 @@ pub fn format_context(messages: &[&TranscriptEntry]) -> String {
             }
             TranscriptEntry::Assistant { .. } => {
                 let tool_uses = entry.tool_uses();
+
+                // Include thinking if present (shows Claude's reasoning)
+                if let Some(thinking) = entry.assistant_thinking() {
+                    output.push_str("THINKING: ");
+                    output.push_str(&thinking);
+                    output.push_str("\n\n");
+                }
 
                 if !tool_uses.is_empty() {
                     output.push_str("TOOLS: ");
