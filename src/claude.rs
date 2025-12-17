@@ -5,7 +5,7 @@
 //! Now just returns raw result text for natural language feedback.
 
 use serde::Deserialize;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -114,6 +114,11 @@ pub fn invoke(
     // trigger hooks that call superego again. Hooks check this env var.
     cmd.env("SUPEREGO_DISABLED", "1");
 
+    // AIDEV-NOTE: Must pipe stdout/stderr to capture output, otherwise
+    // wait_with_output() returns empty and JSON parsing fails with EOF.
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
     // Execute with timeout (default 5 minutes)
     let timeout = Duration::from_millis(options.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS));
     let mut child = cmd.spawn()?;
@@ -142,5 +147,36 @@ pub fn invoke(
                 thread::sleep(Duration::from_millis(100));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test that stdout is properly captured when piped.
+    /// This verifies the fix for the EOF parsing bug where stdout wasn't piped.
+    #[test]
+    fn test_stdout_capture_with_piped_stdio() {
+        let mut cmd = Command::new("echo");
+        cmd.arg(r#"{"result":"test","session_id":"abc","total_cost_usd":0.01}"#);
+
+        // This is what we're testing - stdout must be piped to capture output
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+
+        let child = cmd.spawn().expect("Failed to spawn echo");
+        let output = child.wait_with_output().expect("Failed to wait");
+
+        assert!(output.status.success());
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(!stdout.is_empty(), "stdout should not be empty when piped");
+
+        // Verify we can parse the JSON
+        let response: ClaudeResponse =
+            serde_json::from_str(stdout.trim()).expect("Should parse JSON");
+        assert_eq!(response.result, "test");
+        assert_eq!(response.session_id, "abc");
     }
 }

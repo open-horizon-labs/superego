@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use std::path::Path;
 
+mod audit;
 mod bd;
 mod claude;
 mod decision;
@@ -78,6 +79,13 @@ enum Commands {
 
     /// Check hooks and auto-update if outdated
     Check,
+
+    /// Audit decision history with LLM analysis
+    Audit {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() {
@@ -363,5 +371,70 @@ fn main() {
                 std::process::exit(1);
             }
         },
+        Commands::Audit { json } => {
+            let superego_dir = Path::new(".superego");
+
+            if !superego_dir.exists() {
+                eprintln!("No .superego directory found. Run 'sg init' first.");
+                std::process::exit(1);
+            }
+
+            // Read all decisions across sessions
+            let decisions = match decision::read_all_sessions(superego_dir) {
+                Ok(d) => d,
+                Err(e) => {
+                    eprintln!("Failed to read decisions: {}", e);
+                    std::process::exit(1);
+                }
+            };
+
+            if decisions.is_empty() {
+                if json {
+                    println!(
+                        r#"{{"stats":{{"total":0,"start_date":null,"end_date":null,"session_count":0}},"analysis":"No decisions recorded yet."}}"#
+                    );
+                } else {
+                    println!("No decisions recorded yet.");
+                }
+                return;
+            }
+
+            // Run audit with LLM analysis
+            eprintln!("Analyzing {} decisions...", decisions.len());
+            match audit::run_audit(&decisions) {
+                Ok(result) => {
+                    if json {
+                        match serde_json::to_string_pretty(&result) {
+                            Ok(json_str) => println!("{}", json_str),
+                            Err(e) => {
+                                eprintln!("Failed to serialize result: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        // Human-readable output
+                        println!("Superego Audit Report");
+                        println!("=====================");
+                        println!("Total decisions: {}", result.stats.total);
+                        if let (Some(start), Some(end)) =
+                            (result.stats.start_date, result.stats.end_date)
+                        {
+                            println!(
+                                "Date range: {} to {}",
+                                start.format("%Y-%m-%d"),
+                                end.format("%Y-%m-%d")
+                            );
+                        }
+                        println!("Sessions: {}", result.stats.session_count);
+                        println!("\n--- Analysis ---\n");
+                        println!("{}", result.analysis);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Audit failed: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
     }
 }

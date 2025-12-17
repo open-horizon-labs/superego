@@ -73,6 +73,30 @@ impl From<serde_json::Error> for JournalError {
     }
 }
 
+/// Read decisions from all sessions plus base directory
+/// AIDEV-NOTE: Used by audit command to aggregate all decisions across sessions
+pub fn read_all_sessions(superego_dir: &Path) -> Result<Vec<Decision>, JournalError> {
+    let mut all = Vec::new();
+
+    // Base decisions
+    let base = Journal::new(superego_dir);
+    all.extend(base.read_all()?);
+
+    // Session decisions
+    let sessions_dir = superego_dir.join("sessions");
+    if sessions_dir.exists() {
+        for entry in fs::read_dir(&sessions_dir)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                all.extend(Journal::new(&path).read_all()?);
+            }
+        }
+    }
+
+    all.sort_by_key(|d| d.timestamp);
+    Ok(all)
+}
+
 /// Decision journal - manages reading and writing decision records
 pub struct Journal {
     decisions_dir: PathBuf,
