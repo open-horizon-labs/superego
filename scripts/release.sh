@@ -1,8 +1,10 @@
 #!/bin/bash
 # Release script for sg (superego)
 #
-# Usage: ./scripts/release.sh <version>
-# Example: ./scripts/release.sh 0.2.0
+# Usage: ./scripts/release.sh [version]
+# Examples:
+#   ./scripts/release.sh        # Auto-increment patch (0.3.1 → 0.3.2)
+#   ./scripts/release.sh 0.4.0  # Explicit version
 #
 # This script:
 # 1. Updates version in Cargo.toml
@@ -27,20 +29,27 @@ log() { echo -e "${GREEN}[release]${NC} $1"; }
 warn() { echo -e "${YELLOW}[release]${NC} $1"; }
 error() { echo -e "${RED}[release]${NC} $1" >&2; exit 1; }
 
-# Validate arguments
+# Get version - either from argument or auto-increment patch
 if [ -z "$1" ]; then
-    echo "Usage: $0 <version>"
-    echo "Example: $0 0.2.0"
-    exit 1
+    # Auto-increment patch version
+    CURRENT=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+    if [ -z "$CURRENT" ]; then
+        error "Could not read current version from Cargo.toml"
+    fi
+    MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+    MINOR=$(echo "$CURRENT" | cut -d. -f2)
+    PATCH=$(echo "$CURRENT" | cut -d. -f3)
+    VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+    log "No version specified, auto-incrementing: $CURRENT → $VERSION"
+else
+    VERSION="$1"
+    # Validate version format (semver)
+    if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+        error "Invalid version format. Use semver (e.g., 0.2.0)"
+    fi
 fi
 
-VERSION="$1"
 TAG="v$VERSION"
-
-# Validate version format (semver)
-if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-    error "Invalid version format. Use semver (e.g., 0.2.0)"
-fi
 
 # Check we're in repo root
 if [ ! -f "Cargo.toml" ]; then
