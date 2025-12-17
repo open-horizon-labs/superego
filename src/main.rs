@@ -400,6 +400,7 @@ fn main() {
             }
 
             // Run audit with LLM analysis
+            eprintln!("Analyzing {} decisions...", decisions.len());
             match audit::run_audit(&decisions) {
                 Ok(result) => {
                     if json {
