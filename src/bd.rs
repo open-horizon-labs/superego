@@ -3,8 +3,8 @@
 //! Task state comes from bd, not LLM conversation analysis.
 //! AIDEV-NOTE: Simplified - removed unused functions.
 
-use std::process::Command;
 use serde::Deserialize;
+use std::process::Command;
 
 /// Issue from bd list --json
 #[derive(Debug, Clone, Deserialize)]
@@ -55,8 +55,7 @@ fn get_in_progress() -> Result<Vec<BdIssue>, BdError> {
         return Ok(Vec::new());
     }
 
-    serde_json::from_str(&stdout)
-        .map_err(|e| BdError::ParseError(format!("{}: {}", e, stdout)))
+    serde_json::from_str(&stdout).map_err(|e| BdError::ParseError(format!("{}: {}", e, stdout)))
 }
 
 /// Check if bd is initialized

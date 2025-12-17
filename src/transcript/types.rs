@@ -182,21 +182,17 @@ impl TranscriptEntry {
     pub fn tool_results(&self) -> Vec<(Option<&str>, String)> {
         match self {
             TranscriptEntry::User { message, .. } => match &message.content {
-                UserContent::Blocks(blocks) => {
-                    blocks
-                        .iter()
-                        .filter(|b| b.block_type == "tool_result")
-                        .filter_map(|b| {
-                            let content = b.content.as_ref().map(|c| {
-                                match c {
-                                    serde_json::Value::String(s) => s.clone(),
-                                    other => other.to_string(),
-                                }
-                            })?;
-                            Some((b.tool_use_id.as_deref(), content))
-                        })
-                        .collect()
-                }
+                UserContent::Blocks(blocks) => blocks
+                    .iter()
+                    .filter(|b| b.block_type == "tool_result")
+                    .filter_map(|b| {
+                        let content = b.content.as_ref().map(|c| match c {
+                            serde_json::Value::String(s) => s.clone(),
+                            other => other.to_string(),
+                        })?;
+                        Some((b.tool_use_id.as_deref(), content))
+                    })
+                    .collect(),
                 _ => Vec::new(),
             },
             _ => Vec::new(),
@@ -226,14 +222,12 @@ impl TranscriptEntry {
     /// Extract tool uses from assistant message as (name, input_json)
     pub fn tool_uses(&self) -> Vec<(&str, Option<&serde_json::Value>)> {
         match self {
-            TranscriptEntry::Assistant { message, .. } => {
-                message
-                    .content
-                    .iter()
-                    .filter(|b| b.block_type == "tool_use")
-                    .filter_map(|b| Some((b.name.as_deref()?, b.input.as_ref())))
-                    .collect()
-            }
+            TranscriptEntry::Assistant { message, .. } => message
+                .content
+                .iter()
+                .filter(|b| b.block_type == "tool_use")
+                .filter_map(|b| Some((b.name.as_deref()?, b.input.as_ref())))
+                .collect(),
             _ => Vec::new(),
         }
     }

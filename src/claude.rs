@@ -6,8 +6,8 @@
 
 use serde::Deserialize;
 use std::process::Command;
-use std::time::{Duration, Instant};
 use std::thread;
+use std::time::{Duration, Instant};
 
 /// Response from Claude CLI in JSON format
 #[derive(Debug, Clone, Deserialize)]

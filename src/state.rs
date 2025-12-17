@@ -11,19 +11,11 @@ use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 
 /// Current superego state
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct State {
     pub last_evaluated: Option<DateTime<Utc>>,
+    #[serde(default)]
     pub disabled: bool,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        State {
-            last_evaluated: None,
-            disabled: false,
-        }
-    }
 }
 
 impl State {
@@ -129,8 +121,10 @@ mod tests {
         let dir = tempdir().unwrap();
         let manager = StateManager::new(dir.path());
 
-        let mut state = State::default();
-        state.disabled = true;
+        let state = State {
+            disabled: true,
+            ..Default::default()
+        };
 
         manager.save(&state).unwrap();
 
@@ -152,9 +146,11 @@ mod tests {
         let dir = tempdir().unwrap();
         let manager = StateManager::new(dir.path());
 
-        manager.update(|s| {
-            s.disabled = true;
-        }).unwrap();
+        manager
+            .update(|s| {
+                s.disabled = true;
+            })
+            .unwrap();
 
         let loaded = manager.load().unwrap();
         assert!(loaded.disabled);

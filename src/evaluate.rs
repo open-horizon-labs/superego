@@ -14,6 +14,7 @@ use crate::transcript;
 
 /// Error type for evaluation
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum EvaluateError {
     TranscriptError(transcript::TranscriptError),
     ClaudeError(claude::ClaudeError),
@@ -100,7 +101,10 @@ fn parse_decision_response(response: &str) -> (bool, String) {
             "BLOCK" => (true, feedback),
             _ => {
                 // Unknown decision, default to block
-                eprintln!("Warning: Unknown decision '{}', defaulting to BLOCK", decision);
+                eprintln!(
+                    "Warning: Unknown decision '{}', defaulting to BLOCK",
+                    decision
+                );
                 (true, feedback)
             }
         }
@@ -187,7 +191,10 @@ pub fn evaluate_llm(
     };
 
     let pending_context = if !pending_change.is_empty() {
-        format!("\n--- PENDING CHANGE (evaluate this!) ---\n{}\n--- END PENDING CHANGE ---\n", pending_change)
+        format!(
+            "\n--- PENDING CHANGE (evaluate this!) ---\n{}\n--- END PENDING CHANGE ---\n",
+            pending_change
+        )
     } else {
         String::new()
     };
@@ -198,9 +205,7 @@ pub fn evaluate_llm(
         {}--- CONVERSATION ---\n\
         {}\n\
         --- END CONVERSATION ---{}",
-        bd_context,
-        context,
-        pending_context
+        bd_context, context, pending_context
     );
 
     // Load superego session ID if available (session-namespaced)
@@ -240,7 +245,8 @@ pub fn evaluate_llm(
         }
         // Record to decision journal for audit trail (session-namespaced per user requirement)
         let journal = Journal::new(&session_dir);
-        let decision = Decision::feedback_delivered(Some(response.session_id.clone()), feedback.clone());
+        let decision =
+            Decision::feedback_delivered(Some(response.session_id.clone()), feedback.clone());
         if let Err(e) = journal.write(&decision) {
             eprintln!("Warning: failed to write decision journal: {}", e);
         }
@@ -267,10 +273,14 @@ mod tests {
 
     #[test]
     fn test_parse_decision_block() {
-        let response = "DECISION: BLOCK\n\nThis may be a local maximum. Have alternatives been considered?";
+        let response =
+            "DECISION: BLOCK\n\nThis may be a local maximum. Have alternatives been considered?";
         let (has_concerns, feedback) = parse_decision_response(response);
         assert!(has_concerns);
-        assert_eq!(feedback, "This may be a local maximum. Have alternatives been considered?");
+        assert_eq!(
+            feedback,
+            "This may be a local maximum. Have alternatives been considered?"
+        );
     }
 
     #[test]

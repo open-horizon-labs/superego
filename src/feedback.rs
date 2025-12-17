@@ -40,8 +40,8 @@ impl FeedbackQueue {
 
     /// Check if there's pending feedback (instant, no parsing)
     pub fn has_feedback(&self) -> bool {
-        self.feedback_path.exists() &&
-            fs::metadata(&self.feedback_path)
+        self.feedback_path.exists()
+            && fs::metadata(&self.feedback_path)
                 .map(|m| m.len() > 0)
                 .unwrap_or(false)
     }

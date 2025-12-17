@@ -125,13 +125,16 @@ impl Journal {
             let entry = entry?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |ext| ext == "json") {
+            if path.extension().is_some_and(|ext| ext == "json") {
                 let content = fs::read_to_string(&path)?;
                 match serde_json::from_str::<Decision>(&content) {
                     Ok(decision) => decisions.push(decision),
                     Err(e) => {
                         // AIDEV-NOTE: Skip malformed files rather than failing
-                        eprintln!("Warning: skipping malformed decision file {:?}: {}", path, e);
+                        eprintln!(
+                            "Warning: skipping malformed decision file {:?}: {}",
+                            path, e
+                        );
                     }
                 }
             }

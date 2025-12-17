@@ -132,9 +132,18 @@ mod tests {
         assert!(result.current.is_empty());
 
         // Verify files exist
-        assert!(dir.path().join(".claude/hooks/superego/evaluate.sh").exists());
-        assert!(dir.path().join(".claude/hooks/superego/session-start.sh").exists());
-        assert!(dir.path().join(".claude/hooks/superego/pre-tool-use.sh").exists());
+        assert!(dir
+            .path()
+            .join(".claude/hooks/superego/evaluate.sh")
+            .exists());
+        assert!(dir
+            .path()
+            .join(".claude/hooks/superego/session-start.sh")
+            .exists());
+        assert!(dir
+            .path()
+            .join(".claude/hooks/superego/pre-tool-use.sh")
+            .exists());
     }
 
     #[test]

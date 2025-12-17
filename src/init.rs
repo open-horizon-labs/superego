@@ -292,9 +292,18 @@ mod tests {
         init_at(dir.path(), false).unwrap();
 
         // Check hook scripts exist
-        assert!(dir.path().join(".claude/hooks/superego/evaluate.sh").exists());
-        assert!(dir.path().join(".claude/hooks/superego/session-start.sh").exists());
-        assert!(dir.path().join(".claude/hooks/superego/pre-tool-use.sh").exists());
+        assert!(dir
+            .path()
+            .join(".claude/hooks/superego/evaluate.sh")
+            .exists());
+        assert!(dir
+            .path()
+            .join(".claude/hooks/superego/session-start.sh")
+            .exists());
+        assert!(dir
+            .path()
+            .join(".claude/hooks/superego/pre-tool-use.sh")
+            .exists());
 
         // Check settings.json exists and has hooks
         let settings_path = dir.path().join(".claude/settings.json");
@@ -317,7 +326,10 @@ mod tests {
                 .map(|m| m == "ExitPlanMode")
                 .unwrap_or(false)
         });
-        assert!(has_exit_plan_mode, "PermissionRequest hook should have ExitPlanMode matcher");
+        assert!(
+            has_exit_plan_mode,
+            "PermissionRequest hook should have ExitPlanMode matcher"
+        );
     }
 
     #[test]
@@ -341,7 +353,8 @@ mod tests {
         fs::write(
             claude_dir.join("settings.json"),
             serde_json::to_string_pretty(&existing_settings).unwrap(),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Run init
         init_at(dir.path(), false).unwrap();
@@ -351,7 +364,11 @@ mod tests {
         let settings: Value = serde_json::from_str(&content).unwrap();
 
         let stop_hooks = settings["hooks"]["Stop"].as_array().unwrap();
-        assert_eq!(stop_hooks.len(), 2, "Should have 2 hooks: original + superego");
+        assert_eq!(
+            stop_hooks.len(),
+            2,
+            "Should have 2 hooks: original + superego"
+        );
 
         // Verify original hook still there
         let has_custom = stop_hooks.iter().any(|h| {
@@ -379,6 +396,10 @@ mod tests {
         let settings: Value = serde_json::from_str(&content).unwrap();
 
         let stop_hooks = settings["hooks"]["Stop"].as_array().unwrap();
-        assert_eq!(stop_hooks.len(), 1, "Should have only 1 superego hook, not duplicated");
+        assert_eq!(
+            stop_hooks.len(),
+            1,
+            "Should have only 1 superego hook, not duplicated"
+        );
     }
 }

@@ -96,7 +96,11 @@ pub fn get_messages_since<'a>(
         }
         None => {
             // No previous evaluation - include all messages + summaries (for this session)
-            entries.iter().filter(content_filter).filter(session_filter).collect()
+            entries
+                .iter()
+                .filter(content_filter)
+                .filter(session_filter)
+                .collect()
         }
     }
 }
@@ -116,15 +120,21 @@ fn tool_summary(name: &str, input: Option<&serde_json::Value>) -> String {
         None => return String::new(),
     };
     match name {
-        "Edit" | "Write" | "Read" => {
-            input.get("file_path").and_then(|v| v.as_str()).unwrap_or("").to_string()
-        }
-        "Bash" => {
-            input.get("command").and_then(|v| v.as_str()).unwrap_or("").to_string()
-        }
-        "Glob" | "Grep" => {
-            input.get("pattern").and_then(|v| v.as_str()).unwrap_or("").to_string()
-        }
+        "Edit" | "Write" | "Read" => input
+            .get("file_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        "Bash" => input
+            .get("command")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        "Glob" | "Grep" => input
+            .get("pattern")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
         _ => String::new(),
     }
 }
@@ -148,7 +158,7 @@ pub fn format_context(messages: &[&TranscriptEntry]) -> String {
                 if !tool_results.is_empty() {
                     for (_id, content) in &tool_results {
                         output.push_str("TOOL_RESULT: ");
-                        output.push_str(&content);
+                        output.push_str(content);
                         output.push_str("\n\n");
                     }
                 }
@@ -178,13 +188,13 @@ pub fn format_context(messages: &[&TranscriptEntry]) -> String {
                         output.push_str(name);
                         let summary = tool_summary(name, *input);
                         if !summary.is_empty() {
-                            output.push_str("(");
+                            output.push('(');
                             output.push_str(&summary);
-                            output.push_str(")");
+                            output.push(')');
                         }
-                        output.push_str(" ");
+                        output.push(' ');
                     }
-                    output.push_str("\n");
+                    output.push('\n');
                 }
 
                 if let Some(text) = entry.assistant_text() {
@@ -192,7 +202,7 @@ pub fn format_context(messages: &[&TranscriptEntry]) -> String {
                     output.push_str(&text);
                     output.push_str("\n\n");
                 } else if !tool_uses.is_empty() {
-                    output.push_str("\n");
+                    output.push('\n');
                 }
             }
             _ => {}
@@ -244,7 +254,8 @@ mod tests {
 
     #[test]
     fn test_strip_system_reminders_multiline() {
-        let text = "Question here\n<system-reminder>\nMultiple\nlines\n</system-reminder>\nMore text";
+        let text =
+            "Question here\n<system-reminder>\nMultiple\nlines\n</system-reminder>\nMore text";
         assert_eq!(strip_system_reminders(text), "Question here\n\nMore text");
     }
 

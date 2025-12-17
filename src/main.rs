@@ -13,7 +13,11 @@ mod transcript;
 
 #[derive(Parser)]
 #[command(name = "sg")]
-#[command(author, version, about = "Superego - Metacognitive advisor for Claude Code")]
+#[command(
+    author,
+    version,
+    about = "Superego - Metacognitive advisor for Claude Code"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -80,24 +84,22 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Init { force } => {
-            match init::init(force) {
-                Ok(()) => {
-                    println!("Superego initialized:");
-                    println!("  .superego/prompt.md   - system prompt (customize as needed)");
-                    println!("  .claude/settings.json - hooks configured");
-                    println!("\nReady to use. Superego will evaluate after each Claude response.");
-                }
-                Err(init::InitError::AlreadyExists) => {
-                    eprintln!(".superego/ already exists. Use --force to reinitialize.");
-                    std::process::exit(1);
-                }
-                Err(e) => {
-                    eprintln!("Error initializing: {}", e);
-                    std::process::exit(1);
-                }
+        Commands::Init { force } => match init::init(force) {
+            Ok(()) => {
+                println!("Superego initialized:");
+                println!("  .superego/prompt.md   - system prompt (customize as needed)");
+                println!("  .claude/settings.json - hooks configured");
+                println!("\nReady to use. Superego will evaluate after each Claude response.");
             }
-        }
+            Err(init::InitError::AlreadyExists) => {
+                eprintln!(".superego/ already exists. Use --force to reinitialize.");
+                std::process::exit(1);
+            }
+            Err(e) => {
+                eprintln!("Error initializing: {}", e);
+                std::process::exit(1);
+            }
+        },
         Commands::Evaluate { transcript_path } => {
             // AIDEV-NOTE: This command now redirects to evaluate-llm
             // The old phase-based evaluation is removed.
@@ -115,8 +117,7 @@ fn main() {
                 Ok(result) => {
                     println!(
                         r#"{{"has_concerns": {}, "cost_usd": {:.6}}}"#,
-                        result.has_concerns,
-                        result.cost_usd
+                        result.has_concerns, result.cost_usd
                     );
 
                     if result.has_concerns {
@@ -213,7 +214,9 @@ fn main() {
             if settings_path.exists() {
                 if let Ok(content) = std::fs::read_to_string(settings_path) {
                     if let Ok(mut settings) = serde_json::from_str::<serde_json::Value>(&content) {
-                        if let Some(hooks) = settings.get_mut("hooks").and_then(|h| h.as_object_mut()) {
+                        if let Some(hooks) =
+                            settings.get_mut("hooks").and_then(|h| h.as_object_mut())
+                        {
                             for (_name, hook_array) in hooks.iter_mut() {
                                 if let Some(arr) = hook_array.as_array_mut() {
                                     arr.retain(|h| {
@@ -241,7 +244,10 @@ fn main() {
 
             println!("\nSuperego reset complete. Run 'sg init' to reinitialize.");
         }
-        Commands::EvaluateLlm { transcript_path, session_id } => {
+        Commands::EvaluateLlm {
+            transcript_path,
+            session_id,
+        } => {
             let transcript = Path::new(&transcript_path);
             let superego_dir = Path::new(".superego");
 
@@ -257,8 +263,7 @@ fn main() {
                     // Output for hook/debugging
                     println!(
                         r#"{{"has_concerns": {}, "cost_usd": {:.6}}}"#,
-                        result.has_concerns,
-                        result.cost_usd
+                        result.has_concerns, result.cost_usd
                     );
 
                     // Log feedback to stderr
@@ -345,20 +350,18 @@ fn main() {
                 }
             }
         }
-        Commands::Check => {
-            match hooks::check_and_update_hooks(Path::new(".")) {
-                Ok(result) => {
-                    if result.updated.is_empty() {
-                        println!("Hooks up to date.");
-                    } else {
-                        println!("Updated hooks: {}", result.updated.join(", "));
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Failed to check hooks: {}", e);
-                    std::process::exit(1);
+        Commands::Check => match hooks::check_and_update_hooks(Path::new(".")) {
+            Ok(result) => {
+                if result.updated.is_empty() {
+                    println!("Hooks up to date.");
+                } else {
+                    println!("Updated hooks: {}", result.updated.join(", "));
                 }
             }
-        }
+            Err(e) => {
+                eprintln!("Failed to check hooks: {}", e);
+                std::process::exit(1);
+            }
+        },
     }
 }
