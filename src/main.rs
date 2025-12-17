@@ -6,6 +6,7 @@ mod claude;
 mod decision;
 mod evaluate;
 mod feedback;
+mod hooks;
 mod init;
 mod state;
 mod transcript;
@@ -70,6 +71,9 @@ enum Commands {
         #[arg(long)]
         session_id: Option<String>,
     },
+
+    /// Check hooks and auto-update if outdated
+    Check,
 }
 
 fn main() {
@@ -338,6 +342,21 @@ fn main() {
                         println!("no");
                         std::process::exit(1);
                     }
+                }
+            }
+        }
+        Commands::Check => {
+            match hooks::check_and_update_hooks(Path::new(".")) {
+                Ok(result) => {
+                    if result.updated.is_empty() {
+                        println!("Hooks up to date.");
+                    } else {
+                        println!("Updated hooks: {}", result.updated.join(", "));
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to check hooks: {}", e);
+                    std::process::exit(1);
                 }
             }
         }

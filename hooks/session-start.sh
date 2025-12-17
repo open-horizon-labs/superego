@@ -14,6 +14,9 @@ if [ ! -d ".superego" ]; then
     exit 0
 fi
 
+# Auto-update hooks if outdated (silent)
+sg check >/dev/null 2>&1 || true
+
 # Log
 echo "[$(date '+%H:%M:%S')] [session] Session started" >> .superego/hook.log 2>/dev/null
 
