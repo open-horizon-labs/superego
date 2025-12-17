@@ -147,14 +147,8 @@ pub fn format_context(messages: &[&TranscriptEntry]) -> String {
                 let tool_results = entry.tool_results();
                 if !tool_results.is_empty() {
                     for (_id, content) in &tool_results {
-                        // Truncate large tool results to avoid token bloat
-                        let truncated = if content.len() > 500 {
-                            format!("{}...[truncated]", &content[..500])
-                        } else {
-                            content.clone()
-                        };
                         output.push_str("TOOL_RESULT: ");
-                        output.push_str(&truncated);
+                        output.push_str(&content);
                         output.push_str("\n\n");
                     }
                 }
