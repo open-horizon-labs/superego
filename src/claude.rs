@@ -1,11 +1,13 @@
-/// Claude CLI invocation
-///
-/// Calls the Claude Code CLI for superego evaluation.
-/// AIDEV-NOTE: Simplified - removed phase-based JSON parsing.
-/// Now just returns raw result text for natural language feedback.
+//! Claude CLI invocation
+//!
+//! Calls the Claude Code CLI for superego evaluation.
+//! AIDEV-NOTE: Simplified - removed phase-based JSON parsing.
+//! Now just returns raw result text for natural language feedback.
 
 use serde::Deserialize;
 use std::process::Command;
+use std::time::{Duration, Instant};
+use std::thread;
 
 /// Response from Claude CLI in JSON format
 #[derive(Debug, Clone, Deserialize)]
@@ -21,6 +23,7 @@ pub enum ClaudeError {
     CommandFailed(String),
     ParseError(serde_json::Error),
     IoError(std::io::Error),
+    Timeout(Duration),
 }
 
 impl std::fmt::Display for ClaudeError {
@@ -29,6 +32,7 @@ impl std::fmt::Display for ClaudeError {
             ClaudeError::CommandFailed(msg) => write!(f, "Claude command failed: {}", msg),
             ClaudeError::ParseError(e) => write!(f, "Failed to parse Claude response: {}", e),
             ClaudeError::IoError(e) => write!(f, "IO error: {}", e),
+            ClaudeError::Timeout(d) => write!(f, "Claude timed out after {:?}", d),
         }
     }
 }
@@ -47,6 +51,9 @@ impl From<serde_json::Error> for ClaudeError {
     }
 }
 
+/// Default timeout: 5 minutes
+const DEFAULT_TIMEOUT_MS: u64 = 300_000;
+
 /// Options for Claude invocation
 #[derive(Debug, Clone, Default)]
 pub struct ClaudeOptions {
@@ -56,6 +63,8 @@ pub struct ClaudeOptions {
     pub session_id: Option<String>,
     /// Don't persist session to disk
     pub no_session_persistence: bool,
+    /// Timeout in milliseconds (default: 5 minutes)
+    pub timeout_ms: Option<u64>,
 }
 
 /// Invoke Claude CLI with a system prompt and user message
@@ -105,18 +114,33 @@ pub fn invoke(
     // trigger hooks that call superego again. Hooks check this env var.
     cmd.env("SUPEREGO_DISABLED", "1");
 
-    // Execute the command
-    let output = cmd.output()?;
+    // Execute with timeout (default 5 minutes)
+    let timeout = Duration::from_millis(options.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS));
+    let mut child = cmd.spawn()?;
+    let start = Instant::now();
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(ClaudeError::CommandFailed(stderr.to_string()));
+    // Poll for completion with timeout
+    loop {
+        match child.try_wait()? {
+            Some(status) => {
+                // Process exited - collect output
+                let output = child.wait_with_output()?;
+                if !status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    return Err(ClaudeError::CommandFailed(stderr.to_string()));
+                }
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let response: ClaudeResponse = serde_json::from_str(&stdout)?;
+                return Ok(response);
+            }
+            None => {
+                if start.elapsed() > timeout {
+                    let _ = child.kill();
+                    let _ = child.wait(); // Reap the process
+                    return Err(ClaudeError::Timeout(timeout));
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
+        }
     }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-
-    // Parse JSON response
-    let response: ClaudeResponse = serde_json::from_str(&stdout)?;
-
-    Ok(response)
 }

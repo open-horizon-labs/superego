@@ -1,7 +1,7 @@
-/// Beads (bd) integration for task state
-///
-/// Task state comes from bd, not LLM conversation analysis.
-/// AIDEV-NOTE: Simplified - removed unused functions.
+//! Beads (bd) integration for task state
+//!
+//! Task state comes from bd, not LLM conversation analysis.
+//! AIDEV-NOTE: Simplified - removed unused functions.
 
 use std::process::Command;
 use serde::Deserialize;

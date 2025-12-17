@@ -1,6 +1,6 @@
-/// Initialization for superego
-///
-/// Creates .superego/ directory structure, default files, and Claude Code hooks
+//! Initialization for superego
+//!
+//! Creates .superego/ directory structure, default files, and Claude Code hooks
 
 use std::fs;
 #[cfg(unix)]

@@ -1,8 +1,8 @@
-/// Decision journal for superego
-///
-/// Stores feedback and snapshots as YAML files in .superego/decisions/
-/// for audit trail and context recovery.
-/// AIDEV-NOTE: Simplified - constructor methods removed, just read existing files.
+//! Decision journal for superego
+//!
+//! Stores feedback and snapshots as JSON files in .superego/decisions/
+//! for audit trail and context recovery.
+//! AIDEV-NOTE: Simplified - constructor methods removed, just read existing files.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -47,14 +47,14 @@ impl Decision {
 #[derive(Debug)]
 pub enum JournalError {
     IoError(std::io::Error),
-    SerdeError(serde_yaml::Error),
+    JsonError(serde_json::Error),
 }
 
 impl std::fmt::Display for JournalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             JournalError::IoError(e) => write!(f, "IO error: {}", e),
-            JournalError::SerdeError(e) => write!(f, "YAML error: {}", e),
+            JournalError::JsonError(e) => write!(f, "JSON error: {}", e),
         }
     }
 }
@@ -67,9 +67,9 @@ impl From<std::io::Error> for JournalError {
     }
 }
 
-impl From<serde_yaml::Error> for JournalError {
-    fn from(e: serde_yaml::Error) -> Self {
-        JournalError::SerdeError(e)
+impl From<serde_json::Error> for JournalError {
+    fn from(e: serde_json::Error) -> Self {
+        JournalError::JsonError(e)
     }
 }
 
@@ -96,22 +96,24 @@ impl Journal {
     pub fn write(&self, decision: &Decision) -> Result<PathBuf, JournalError> {
         self.ensure_dir()?;
 
-        // Format timestamp for filename: 2024-01-15T10-30-00Z.yaml
+        // Format timestamp for filename: 2024-01-15T10-30-00Z.json
         let filename = decision
             .timestamp
-            .format("%Y-%m-%dT%H-%M-%SZ.yaml")
+            .format("%Y-%m-%dT%H-%M-%SZ.json")
             .to_string();
         let path = self.decisions_dir.join(&filename);
 
         let file = File::create(&path)?;
         let mut writer = BufWriter::new(file);
-        let yaml = serde_yaml::to_string(decision)?;
-        writer.write_all(yaml.as_bytes())?;
+        let json = serde_json::to_string_pretty(decision)?;
+        writer.write_all(json.as_bytes())?;
 
         Ok(path)
     }
 
     /// Read all decisions from the journal, sorted by timestamp
+    /// AIDEV-NOTE: Only reads .json files. Old .yaml files from pre-0.4 are ignored
+    /// (decision journal is audit data, not critical state).
     pub fn read_all(&self) -> Result<Vec<Decision>, JournalError> {
         if !self.decisions_dir.exists() {
             return Ok(Vec::new());
@@ -123,9 +125,9 @@ impl Journal {
             let entry = entry?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |ext| ext == "yaml") {
+            if path.extension().map_or(false, |ext| ext == "json") {
                 let content = fs::read_to_string(&path)?;
-                match serde_yaml::from_str::<Decision>(&content) {
+                match serde_json::from_str::<Decision>(&content) {
                     Ok(decision) => decisions.push(decision),
                     Err(e) => {
                         // AIDEV-NOTE: Skip malformed files rather than failing

@@ -1,8 +1,8 @@
-/// State management for superego
-///
-/// Maintains disabled flag in .superego/state.json
-/// AIDEV-NOTE: Simplified - removed override mechanism.
-/// Task state comes from bd, disabled flag is for user control.
+//! State management for superego
+//!
+//! Maintains disabled flag in .superego/state.json
+//! AIDEV-NOTE: Simplified - removed override mechanism.
+//! Task state comes from bd, disabled flag is for user control.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

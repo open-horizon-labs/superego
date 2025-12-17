@@ -1,6 +1,6 @@
-/// Evaluation for superego
-///
-/// LLM-based evaluation with natural language feedback.
+//! Evaluation for superego
+//!
+//! LLM-based evaluation with natural language feedback.
 
 use std::fs;
 use std::path::Path;
@@ -207,11 +207,12 @@ pub fn evaluate_llm(
     let superego_session_path = session_dir.join("superego_session");
     let superego_session_id = fs::read_to_string(&superego_session_path).ok();
 
-    // Call Claude
+    // Call Claude (timeout_ms: None uses default 5 minutes)
     let options = ClaudeOptions {
         model: Some("sonnet".to_string()),
         session_id: superego_session_id.clone(),
         no_session_persistence: false,
+        timeout_ms: None,
     };
 
     let response = claude::invoke(&system_prompt, &message, options)?;

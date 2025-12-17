@@ -34,18 +34,12 @@ enum Commands {
         transcript_path: String,
     },
 
-    /// Accept feedback and clear pending state
-    Acknowledge,
-
     /// Query decision history
     History {
         /// Maximum number of decisions to return
         #[arg(long, default_value = "10")]
         limit: usize,
     },
-
-    /// Inject context into Claude session (called by SessionStart hook)
-    ContextInject,
 
     /// Check if there's pending feedback (instant, for hooks)
     HasFeedback,
@@ -59,12 +53,6 @@ enum Commands {
         #[arg(long)]
         clear_session: bool,
     },
-
-    /// Disable superego for this project
-    Disable,
-
-    /// Re-enable superego for this project
-    Enable,
 
     /// LLM-based evaluation with natural language feedback
     EvaluateLlm {
@@ -139,9 +127,6 @@ fn main() {
                 }
             }
         }
-        Commands::Acknowledge => {
-            println!("sg acknowledge - not yet implemented");
-        }
         Commands::History { limit } => {
             let superego_dir = Path::new(".superego");
             let journal = decision::Journal::new(superego_dir);
@@ -173,9 +158,6 @@ fn main() {
                     std::process::exit(1);
                 }
             }
-        }
-        Commands::ContextInject => {
-            println!("sg context-inject - not yet implemented");
         }
         Commands::HasFeedback => {
             let superego_dir = Path::new(".superego");
@@ -254,12 +236,6 @@ fn main() {
             }
 
             println!("\nSuperego reset complete. Run 'sg init' to reinitialize.");
-        }
-        Commands::Disable => {
-            println!("sg disable - not yet implemented");
-        }
-        Commands::Enable => {
-            println!("sg enable - not yet implemented");
         }
         Commands::EvaluateLlm { transcript_path, session_id } => {
             let transcript = Path::new(&transcript_path);

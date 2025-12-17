@@ -1,8 +1,8 @@
-/// Feedback queue for superego
-///
-/// Async evaluation writes feedback here, hooks check and retrieve it.
-/// AIDEV-NOTE: Simplified to just message. No severity levels -
-/// all feedback is informational, Claude decides how to act on it.
+//! Feedback queue for superego
+//!
+//! Async evaluation writes feedback here, hooks check and retrieve it.
+//! AIDEV-NOTE: Simplified to just message. No severity levels -
+//! all feedback is informational, Claude decides how to act on it.
 
 use std::fs;
 use std::path::{Path, PathBuf};
