@@ -102,10 +102,14 @@ cargo test || error "Tests failed"
 log "Building release binary..."
 cargo build --release || error "Build failed"
 
-# Step 4: Commit version bump
+# Step 4: Commit version bump (if needed)
 log "Committing version bump..."
 git add Cargo.toml
-git commit -m "Bump version to $VERSION"
+if git diff --cached --quiet; then
+    log "Version already at $VERSION, skipping commit"
+else
+    git commit -m "Bump version to $VERSION"
+fi
 
 # Step 5: Create and push tag
 log "Creating tag $TAG..."

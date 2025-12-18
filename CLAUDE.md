@@ -75,11 +75,10 @@ Located in `hooks/` (embedded in binary for legacy mode):
 ├── prompt.md          # Customizable system prompt for evaluation
 ├── state.json         # Evaluation state (last_evaluated timestamp)
 ├── config.yaml        # Configuration (eval interval, model, etc.)
-├── decisions/         # Decision journal (audit trail) - JSON files
 ├── sessions/          # Per-session state and decisions
 │   └── <session-id>/
 │       ├── state.json
-│       ├── decisions/
+│       ├── decisions/  # Decision journal (audit trail) - JSON files
 │       └── superego_session
 └── feedback           # Pending feedback queue (transient)
 ```
@@ -99,7 +98,7 @@ The plugin's hooks use `${CLAUDE_PROJECT_DIR}` to find the project's `.superego/
 
 ## Decision Journal
 
-Decisions are stored as JSON files in `.superego/decisions/` (base) and `.superego/sessions/<id>/decisions/` (per-session).
+Decisions are stored as JSON files in `.superego/sessions/<session-id>/decisions/`.
 
 **Format:**
 ```json

@@ -157,9 +157,8 @@ fn main() {
         }
         Commands::History { limit } => {
             let superego_dir = Path::new(".superego");
-            let journal = decision::Journal::new(superego_dir);
 
-            match journal.read_all() {
+            match decision::read_all_sessions(superego_dir) {
                 Ok(decisions) => {
                     let start = decisions.len().saturating_sub(limit);
                     let recent: Vec<_> = decisions.into_iter().skip(start).collect();

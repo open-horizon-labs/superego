@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use regex::Regex;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -105,12 +104,46 @@ pub fn get_messages_since<'a>(
     }
 }
 
-/// Strip <system-reminder>...</system-reminder> blocks from text
+/// Keep only the last <system-reminder>...</system-reminder> block, strip others
 /// AIDEV-NOTE: System reminders are injected by Claude Code for workflow/context.
-/// Superego should evaluate technical decisions, not enforce workflow instructions.
-fn strip_system_reminders(text: &str) -> String {
-    let re = Regex::new(r"(?s)<system-reminder>.*?</system-reminder>").unwrap();
-    re.replace_all(text, "").trim().to_string()
+/// We keep the last one as a signal to superego that guidance exists, but dedupe
+/// to avoid context bloat from repeated reminders.
+fn dedupe_system_reminders(text: &str) -> String {
+    const OPEN: &str = "<system-reminder>";
+    const CLOSE: &str = "</system-reminder>";
+
+    // Find all reminder blocks
+    let mut blocks: Vec<(usize, usize)> = Vec::new();
+    let mut search_start = 0;
+
+    while let Some(open_offset) = text[search_start..].find(OPEN) {
+        let open_pos = search_start + open_offset;
+        let after_open = open_pos + OPEN.len();
+        if let Some(close_offset) = text[after_open..].find(CLOSE) {
+            let close_end = after_open + close_offset + CLOSE.len();
+            blocks.push((open_pos, close_end));
+            search_start = close_end;
+        } else {
+            break;
+        }
+    }
+
+    if blocks.len() <= 1 {
+        // Zero or one reminder - nothing to dedupe
+        return text.trim().to_string();
+    }
+
+    // Keep last block, remove all others
+    blocks.pop(); // Remove last from removal list (it stays in output)
+    let mut result = String::with_capacity(text.len());
+    let mut prev_end = 0;
+
+    for (start, end) in blocks {
+        result.push_str(&text[prev_end..start]);
+        prev_end = end;
+    }
+    result.push_str(&text[prev_end..]);
+    result.trim().to_string()
 }
 
 /// Extract key identifier from tool input (file path, command, pattern)
@@ -164,7 +197,7 @@ pub fn format_context(messages: &[&TranscriptEntry]) -> String {
                 }
 
                 if let Some(text) = entry.user_text() {
-                    let cleaned = strip_system_reminders(&text);
+                    let cleaned = dedupe_system_reminders(&text);
                     if !cleaned.is_empty() {
                         output.push_str("USER: ");
                         output.push_str(&cleaned);
@@ -241,33 +274,56 @@ mod tests {
     }
 
     #[test]
-    fn test_strip_system_reminders_single() {
+    fn test_dedupe_system_reminders_single() {
+        // Single reminder is kept
         let text = "Hello <system-reminder>workflow stuff</system-reminder> world";
-        assert_eq!(strip_system_reminders(text), "Hello  world");
+        assert_eq!(
+            dedupe_system_reminders(text),
+            "Hello <system-reminder>workflow stuff</system-reminder> world"
+        );
     }
 
     #[test]
-    fn test_strip_system_reminders_multiple() {
+    fn test_dedupe_system_reminders_multiple() {
+        // Multiple reminders: keep last, strip others
         let text = "<system-reminder>first</system-reminder>content<system-reminder>second</system-reminder>";
-        assert_eq!(strip_system_reminders(text), "content");
+        assert_eq!(
+            dedupe_system_reminders(text),
+            "content<system-reminder>second</system-reminder>"
+        );
     }
 
     #[test]
-    fn test_strip_system_reminders_multiline() {
+    fn test_dedupe_system_reminders_multiline() {
+        // Single multiline reminder is kept
         let text =
             "Question here\n<system-reminder>\nMultiple\nlines\n</system-reminder>\nMore text";
-        assert_eq!(strip_system_reminders(text), "Question here\n\nMore text");
+        assert_eq!(
+            dedupe_system_reminders(text),
+            "Question here\n<system-reminder>\nMultiple\nlines\n</system-reminder>\nMore text"
+        );
     }
 
     #[test]
-    fn test_strip_system_reminders_none() {
+    fn test_dedupe_system_reminders_none() {
         let text = "Just normal text";
-        assert_eq!(strip_system_reminders(text), "Just normal text");
+        assert_eq!(dedupe_system_reminders(text), "Just normal text");
     }
 
     #[test]
-    fn test_strip_system_reminders_only_reminders() {
+    fn test_dedupe_system_reminders_only_reminders() {
+        // Single reminder is kept (even if it's the only content)
         let text = "<system-reminder>only this</system-reminder>";
-        assert_eq!(strip_system_reminders(text), "");
+        assert_eq!(
+            dedupe_system_reminders(text),
+            "<system-reminder>only this</system-reminder>"
+        );
+    }
+
+    #[test]
+    fn test_dedupe_system_reminders_three() {
+        // Three reminders: keep only the last
+        let text = "<system-reminder>1</system-reminder>A<system-reminder>2</system-reminder>B<system-reminder>3</system-reminder>";
+        assert_eq!(dedupe_system_reminders(text), "AB<system-reminder>3</system-reminder>");
     }
 }
