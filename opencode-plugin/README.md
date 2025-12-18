@@ -50,34 +50,26 @@ opencode-plugin/              # OpenCode adapter (TypeScript)
 
 ## Quick Start
 
-### Option A: Download from GitHub (easiest)
+### Option A: Download from GitHub Release (easiest)
 
 ```bash
 cd /path/to/your/project
 
-# 1. Download pre-built plugin from GitHub Actions
-# Go to: https://github.com/cloud-atlas-ai/superego/actions/workflows/ci.yml
-# Click latest successful run → Artifacts → Download "superego-opencode-plugin"
-# Or use gh CLI:
-gh run download --name superego-opencode-plugin --dir /tmp/superego-plugin
+# 1. Download pre-built plugin
+curl -L -o superego.js https://github.com/cloud-atlas-ai/superego/releases/download/v0.4.0-alpha/index.js
 
 # 2. Install plugin
 mkdir -p .opencode/plugin
-cp /tmp/superego-plugin/index.js .opencode/plugin/superego.js
+mv superego.js .opencode/plugin/
 
-# 3. Create superego config
-mkdir -p .superego
-curl -o .superego/prompt.md https://raw.githubusercontent.com/cloud-atlas-ai/superego/main/default_prompt.md
-
-# 4. Start OpenCode
+# 3. Start OpenCode - auto-inits .superego/ and fetches full prompt from GitHub
 opencode
+# First run: creates .superego/prompt.md, then restart OpenCode
 ```
 
 ### Option B: Build from source
 
 ```bash
-cd /path/to/your/project
-
 # 1. Clone and build
 git clone https://github.com/cloud-atlas-ai/superego.git /tmp/superego
 cd /tmp/superego/opencode-plugin
@@ -85,30 +77,25 @@ bun install
 bun build src/index.ts --outdir dist --target bun
 
 # 2. Install plugin
-mkdir -p /path/to/your/project/.opencode/plugin
-cp dist/index.js /path/to/your/project/.opencode/plugin/superego.js
+cd /path/to/your/project
+mkdir -p .opencode/plugin
+cp /tmp/superego/opencode-plugin/dist/index.js .opencode/plugin/superego.js
 
-# 3. Create superego config
-mkdir -p /path/to/your/project/.superego
-cp /tmp/superego/default_prompt.md /path/to/your/project/.superego/prompt.md
-
-# 4. Start OpenCode
+# 3. Start OpenCode - auto-inits .superego/
 opencode
 ```
 
-### Option C: Global install (all projects)
+### Option C: Global install
 
 ```bash
-# 1. Download or build plugin (see above)
+# 1. Download plugin
+curl -L -o superego.js https://github.com/cloud-atlas-ai/superego/releases/download/v0.4.0-alpha/index.js
 
 # 2. Install globally
 mkdir -p ~/.config/opencode/plugin
-cp /path/to/index.js ~/.config/opencode/plugin/superego.js
+mv superego.js ~/.config/opencode/plugin/
 
-# 3. In each project, create superego config
-cd /path/to/your/project
-mkdir -p .superego
-curl -o .superego/prompt.md https://raw.githubusercontent.com/cloud-atlas-ai/superego/main/default_prompt.md
+# 3. Start OpenCode in any project - auto-inits .superego/ per project
 ```
 
 ## Test Plan

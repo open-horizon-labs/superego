@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-opencode-plugin:
+    name: Build OpenCode Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        working-directory: opencode-plugin
+        run: bun install
+      - name: Build plugin
+        working-directory: opencode-plugin
+        run: bun build src/index.ts --outdir dist --target bun
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: superego-opencode-plugin
+          path: opencode-plugin/dist/index.js
+
+  release:
+    name: Create Release
+    needs: build-opencode-plugin
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download OpenCode plugin
+        uses: actions/download-artifact@v4
+        with:
+          name: superego-opencode-plugin
+          path: ./artifacts
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./artifacts/index.js
+          generate_release_notes: true
