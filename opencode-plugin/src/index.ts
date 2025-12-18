@@ -22,6 +22,7 @@ function log(superegoDir: string, message: string): void {
 }
 
 const SUPEREGO_DIR = ".superego";
+const BUILD_VERSION = `${new Date().toISOString().slice(0, 16)}`; // Build timestamp
 const PROMPT_URL = "https://raw.githubusercontent.com/cloud-atlas-ai/superego/main/default_prompt.md";
 const FALLBACK_PROMPT = `# Superego System Prompt
 
@@ -64,12 +65,12 @@ function writeFeedback(directory: string, sessionId: string, feedback: string): 
 }
 
 // Format messages for evaluation prompt
-// NEEDS VALIDATION: Message structure assumed based on OpenCode SDK docs
 function formatConversation(messages: any[]): string {
   return messages
     .map((m: any) => {
       const role = m.info?.role || "unknown";
-      const content = m.parts?.map((p: any) => p.content || "").join("\n") || "";
+      // Parts have 'text' not 'content'
+      const content = m.parts?.map((p: any) => p.text || p.content || "").join("\n") || "";
       return `${role.toUpperCase()}: ${content}`;
     })
     .join("\n\n---\n\n");
@@ -79,8 +80,11 @@ export const Superego: Plugin = async ({ directory, client }) => {
   const superegoDir = join(directory, SUPEREGO_DIR);
   const initialized = existsSync(superegoDir);
 
+  // Track eval sessions we create to avoid recursive evaluation
+  const evalSessionIds = new Set<string>();
+
   if (initialized) {
-    log(superegoDir, "Plugin loaded");
+    log(superegoDir, `Plugin loaded [${BUILD_VERSION}]`);
   }
 
   const prompt = initialized ? loadPrompt(directory) : null;
@@ -89,6 +93,13 @@ export const Superego: Plugin = async ({ directory, client }) => {
   }
 
   return {
+    // Inject contract into system prompt (no LLM call needed)
+    "experimental.chat.system.transform": async (_input, output) => {
+      const alreadyHas = output.system.some((s: string) => s.includes("SUPEREGO ACTIVE"));
+      if (initialized && !alreadyHas) {
+        output.system.push(SUPEREGO_CONTRACT);
+      }
+    },
     tool: {
       superego: tool({
         description: "Manage superego metacognitive advisor. Commands: status (default), init, disable, enable, remove.",
@@ -160,34 +171,34 @@ export const Superego: Plugin = async ({ directory, client }) => {
         return;
       }
 
-      // Session created - inject contract
-      if (event.type === "session.created") {
-        const sessionId = (event as any).properties?.info?.id;
-        log(superegoDir, `Session created: ${sessionId}`);
-
-        if (sessionId) {
-          try {
-            // Inject contract without triggering response (noReply: true)
-            await client.session.prompt({
-              path: { id: sessionId },
-              body: {
-                noReply: true,
-                parts: [{ type: "text", text: SUPEREGO_CONTRACT }],
-              },
-            });
-            log(superegoDir, "Contract injected");
-          } catch (e) {
-            log(superegoDir, `ERROR: Failed to inject contract: ${e}`);
-          }
-        }
-      }
-
       // Session idle - run evaluation
       if (event.type === "session.idle") {
-        const sessionId = (event as any).properties?.info?.id;
-        if (!sessionId || !prompt) return;
+        const sessionId = (event as any).properties?.info?.id || (event as any).properties?.sessionID || (event as any).properties?.id;
+        if (!sessionId || !prompt) {
+          log(superegoDir, `session.idle skipped: sessionId=${sessionId}, hasPrompt=${!!prompt}`);
+          return;
+        }
 
-        log(superegoDir, `Session idle: ${sessionId}, evaluating...`);
+        // Skip eval sessions we created (prevent recursion)
+        if (evalSessionIds.has(sessionId)) {
+          log(superegoDir, `Skipping eval session ${sessionId} (in Set)`);
+          evalSessionIds.delete(sessionId); // Clean up
+          return;
+        }
+
+        // Also check session title for eval marker (handles dual plugin instance issue)
+        try {
+          const sessionInfo = await client.session.get({ path: { id: sessionId } });
+          const title = (sessionInfo as any)?.data?.title || (sessionInfo as any)?.title || "";
+          if (title.includes("[superego-eval]")) {
+            log(superegoDir, `Skipping eval session ${sessionId} (by title)`);
+            return;
+          }
+        } catch {
+          // If we can't get session info, proceed with evaluation
+        }
+
+        log(superegoDir, `Evaluating ${sessionId}...`);
 
         try {
           // Get conversation messages
@@ -203,33 +214,53 @@ export const Superego: Plugin = async ({ directory, client }) => {
             return;
           }
 
+          // Extract model from original session to use for eval
+          const originalModel = messages[0]?.info?.model;
+          const modelString = originalModel ? `${originalModel.providerID}/${originalModel.modelID}` : undefined;
+          log(superegoDir, `Original session model: ${modelString || "unknown"}`);
+
           // Format conversation for evaluation
           const conversation = formatConversation(messages);
 
           // Create eval session and get response via OpenCode's configured LLM
           log(superegoDir, "Creating eval session...");
-          const evalSession = await client.session.create({ body: {} });
-          const evalSessionId = (evalSession as any)?.id;
+          // Mark eval sessions with distinctive title so we can skip them
+          const evalSession = await client.session.create({
+            body: { title: "[superego-eval]" }
+          });
+          // Response structure: { data: { id: "ses_..." }, request: {}, response: {} }
+          const evalSessionId = (evalSession as any)?.data?.id || (evalSession as any)?.id;
 
           if (!evalSessionId) {
-            log(superegoDir, "ERROR: Failed to create eval session");
+            log(superegoDir, `ERROR: Failed to create eval session. Response: ${JSON.stringify(evalSession)}`);
             return;
           }
+          log(superegoDir, `Eval session created: ${evalSessionId}`);
+          evalSessionIds.add(evalSessionId); // Track to prevent recursive evaluation
 
           const evalPrompt = `${prompt}\n\n---\n\n## Conversation to Evaluate\n\n${conversation}`;
 
-          log(superegoDir, "Calling LLM via OpenCode...");
+          log(superegoDir, `Calling LLM via OpenCode with model ${modelString || "default"}...`);
           // session.prompt() returns the AssistantMessage response directly
+          // Pass model explicitly to use same model as original session
           const result = await client.session.prompt({
             path: { id: evalSessionId },
             body: {
+              model: originalModel ? { providerID: originalModel.providerID, modelID: originalModel.modelID } : undefined,
               parts: [{ type: "text", text: evalPrompt }],
             },
           });
 
           // Extract response text
-          // NEEDS VALIDATION: What's the actual response structure?
-          const response = (result as any)?.parts?.map((p: any) => p.text || p.content || "").join("\n") || "";
+          log(superegoDir, `Raw result keys: ${Object.keys(result || {}).join(", ")}`);
+          log(superegoDir, `Raw result: ${JSON.stringify(result).slice(0, 500)}`);
+
+          // Try multiple paths for response extraction
+          const resultData = (result as any)?.data || result;
+          const response = resultData?.parts?.map((p: any) => p.text || p.content || "").join("\n")
+            || resultData?.text
+            || resultData?.content
+            || "";
           log(superegoDir, `LLM response: ${response.slice(0, 200)}`);
 
           // Clean up eval session
