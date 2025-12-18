@@ -35,10 +35,10 @@ cargo run -- <args>      # Run with args (e.g., cargo run -- init)
 - `audit.rs` - Audit command: aggregates decisions and runs LLM analysis
 - `transcript/` - Parses Claude Code JSONL transcript files
   - `types.rs` - Serde structs for transcript entries (User, Assistant, Summary, etc.)
-  - `reader.rs` - Reads and filters transcript messages since last evaluation
+  - `reader.rs` - Reads and filters transcript messages since last evaluation; dedupes system reminders (keeps last)
 - `bd.rs` - Integration with beads (`bd`) task tracking; provides current task context
 - `state.rs` - Manages `.superego/state.json` (last_evaluated timestamp)
-- `decision.rs` - Decision journal for audit trail (`.superego/decisions/`); includes `read_all_sessions()`
+- `decision.rs` - Decision journal for audit trail; `read_all_sessions()` aggregates from all session dirs
 - `feedback.rs` - Feedback queue (`.superego/feedback` file)
 
 ### Plugin Structure (Claude Code Plugin)
@@ -62,6 +62,14 @@ Located in `hooks/` (embedded in binary for legacy mode):
 **Decision format:** LLM responses must follow `DECISION: ALLOW|BLOCK\n\n<feedback>` format. Unknown decisions default to BLOCK for safety.
 
 **State tracking:** `last_evaluated` timestamp in state.json ensures only new conversation content is evaluated.
+
+## Dependencies
+
+Minimal dependency set (no regex, no async runtime):
+- `chrono` - DateTime handling, RFC3339 parsing/formatting, serde integration
+- `clap` - CLI argument parsing with derive macros
+- `serde` + `serde_json` - JSON serialization for transcripts, state, decisions
+- `tempfile` (dev) - Test fixtures
 
 ## Environment Variables
 
