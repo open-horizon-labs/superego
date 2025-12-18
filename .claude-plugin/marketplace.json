@@ -1,0 +1,22 @@
+{
+  "name": "superego",
+  "owner": {
+    "name": "Cloud Atlas AI",
+    "email": "hello@cloudatlas.ai"
+  },
+  "metadata": {
+    "description": "Superego plugin marketplace",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "superego",
+      "source": "./plugin",
+      "description": "Metacognitive advisor that monitors Claude Code and provides feedback",
+      "version": "0.4.0",
+      "author": {
+        "name": "Cloud Atlas AI"
+      }
+    }
+  ]
+}

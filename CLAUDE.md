@@ -28,7 +28,8 @@ cargo run -- <args>      # Run with args (e.g., cargo run -- init)
 ### Module Structure
 
 - `main.rs` - CLI entry point using clap, defines all subcommands
-- `init.rs` - Creates `.superego/` directory structure and configures Claude Code hooks
+- `init.rs` - Creates `.superego/` directory structure (hooks are now provided by plugin)
+- `migrate.rs` - Migration from legacy hooks to plugin mode
 - `evaluate.rs` - LLM-based evaluation logic; calls Claude to review conversation transcripts
 - `claude.rs` - Wrapper for invoking Claude CLI (`claude -p --output-format json`)
 - `audit.rs` - Audit command: aggregates decisions and runs LLM analysis
@@ -40,12 +41,19 @@ cargo run -- <args>      # Run with args (e.g., cargo run -- init)
 - `decision.rs` - Decision journal for audit trail (`.superego/decisions/`); includes `read_all_sessions()`
 - `feedback.rs` - Feedback queue (`.superego/feedback` file)
 
-### Hook Scripts (embedded in binary via `include_str!`)
+### Plugin Structure (Claude Code Plugin)
 
-Located in `hooks/`:
-- `session-start.sh` - Injects superego contract via `additionalContext`
-- `evaluate.sh` - Runs `sg evaluate-llm`, blocks if concerns found
-- `pre-tool-use.sh` - Evaluates pending changes before large Edit/Write operations
+Located in `plugin/`:
+- `.claude-plugin/plugin.json` - Plugin manifest
+- `hooks/hooks.json` - Hook event → script mappings
+- `scripts/session-start.sh` - Injects superego contract via `additionalContext`
+- `scripts/evaluate.sh` - Runs `sg evaluate-llm`, blocks if concerns found
+- `scripts/pre-tool-use.sh` - Evaluates pending changes before large Edit/Write operations
+
+### Legacy Hook Scripts (kept for reference)
+
+Located in `hooks/` (embedded in binary for legacy mode):
+- `session-start.sh`, `evaluate.sh`, `pre-tool-use.sh`
 
 ### Key Design Patterns
 
@@ -66,7 +74,7 @@ Located in `hooks/`:
 .superego/
 ├── prompt.md          # Customizable system prompt for evaluation
 ├── state.json         # Evaluation state (last_evaluated timestamp)
-├── config.yaml        # Placeholder config
+├── config.yaml        # Configuration (eval interval, model, etc.)
 ├── decisions/         # Decision journal (audit trail) - JSON files
 ├── sessions/          # Per-session state and decisions
 │   └── <session-id>/
@@ -74,15 +82,15 @@ Located in `hooks/`:
 │       ├── decisions/
 │       └── superego_session
 └── feedback           # Pending feedback queue (transient)
-
-.claude/
-├── settings.json      # Hook configuration
-└── hooks/superego/    # Hook scripts
 ```
+
+Note: Hook configuration is now provided by the Claude Code plugin (`/plugin install superego`).
+The plugin's hooks use `${CLAUDE_PROJECT_DIR}` to find the project's `.superego/` directory.
 
 ## CLI Commands
 
 - `sg init` - Initialize superego for a project
+- `sg migrate` - Remove legacy hooks (for users upgrading from < v0.4.0)
 - `sg audit` - Analyze decision history with LLM (patterns, timeline, insights)
 - `sg audit --json` - JSON output for programmatic use
 - `sg history --limit N` - Show recent decisions

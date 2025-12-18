@@ -80,41 +80,41 @@ fn parse_decision_response(response: &str) -> (bool, String) {
         return (true, response.to_string()); // Default to block if empty
     }
 
-    let first_line = lines[0].trim();
+    // Search for DECISION: line anywhere in response (handles code fences, extra whitespace, etc.)
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if let Some(decision_part) = trimmed.strip_prefix("DECISION:") {
+            let decision = decision_part.trim().to_uppercase();
 
-    // Check for DECISION: prefix
-    if let Some(decision_part) = first_line.strip_prefix("DECISION:") {
-        let decision = decision_part.trim().to_uppercase();
+            // Extract feedback (everything after the DECISION line, skipping blank lines)
+            let feedback: String = lines[idx + 1..]
+                .iter()
+                .skip_while(|l| l.trim().is_empty())
+                .cloned()
+                .collect::<Vec<&str>>()
+                .join("\n")
+                .trim()
+                .trim_end_matches("```") // Strip trailing code fence if present
+                .trim()
+                .to_string();
 
-        // Extract feedback (everything after the first line, skipping blank lines)
-        let feedback: String = lines[1..]
-            .iter()
-            .skip_while(|l| l.trim().is_empty())
-            .cloned()
-            .collect::<Vec<&str>>()
-            .join("\n")
-            .trim()
-            .to_string();
-
-        match decision.as_str() {
-            "ALLOW" => (false, feedback),
-            "BLOCK" => (true, feedback),
-            _ => {
-                // Unknown decision, default to block
-                eprintln!(
-                    "Warning: Unknown decision '{}', defaulting to BLOCK",
-                    decision
-                );
-                (true, feedback)
+            match decision.as_str() {
+                "ALLOW" => return (false, feedback),
+                "BLOCK" => return (true, feedback),
+                _ => {
+                    // Unknown decision, default to block
+                    eprintln!("Warning: Unknown decision '{}', defaulting to BLOCK", decision);
+                    return (true, feedback);
+                }
             }
         }
-    } else {
-        // No DECISION prefix found - legacy format or malformed
-        // Fall back to old behavior: check for "No concerns"
-        let has_concerns = !response.eq_ignore_ascii_case("no concerns.")
-            && !response.eq_ignore_ascii_case("no concerns");
-        (has_concerns, response.to_string())
     }
+
+    // No DECISION prefix found - legacy format or malformed
+    // Fall back to old behavior: check for "No concerns"
+    let has_concerns = !response.eq_ignore_ascii_case("no concerns.")
+        && !response.eq_ignore_ascii_case("no concerns");
+    (has_concerns, response.to_string())
 }
 
 /// Evaluate conversation using LLM with natural language feedback

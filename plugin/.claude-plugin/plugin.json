@@ -1,0 +1,11 @@
+{
+  "name": "superego",
+  "version": "0.4.0",
+  "description": "Metacognitive advisor that monitors Claude Code and provides feedback",
+  "author": {
+    "name": "Cloud Atlas AI",
+    "email": "hello@cloudatlas.ai",
+    "url": "https://github.com/cloud-atlas-ai"
+  },
+  "repository": "https://github.com/cloud-atlas-ai/superego"
+}
