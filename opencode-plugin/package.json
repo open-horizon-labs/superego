@@ -11,9 +11,7 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@google/generative-ai": "^0.21.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@opencode-ai/plugin": "latest",
     "@types/bun": "latest",

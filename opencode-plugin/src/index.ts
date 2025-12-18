@@ -2,17 +2,15 @@
  * Superego OpenCode Plugin
  *
  * Metacognitive advisor for OpenCode. Injects contract on session start,
- * evaluates via Gemini on session idle.
+ * evaluates via OpenCode's configured LLM on session idle.
  */
 
 import type { Plugin } from "@opencode-ai/plugin";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const SUPEREGO_DIR = ".superego";
 const SUPEREGO_CONTRACT = `SUPEREGO ACTIVE: This project uses superego, a metacognitive advisor that monitors your work. When you receive SUPEREGO FEEDBACK, critically evaluate it: if you agree, incorporate it into your approach; if you disagree on non-trivial feedback, escalate to the user explaining both perspectives.`;
-const DEFAULT_MODEL = "gemini-2.5-pro";
 
 function loadPrompt(directory: string): string | null {
   const path = join(directory, SUPEREGO_DIR, "prompt.md");
@@ -58,11 +56,6 @@ export const Superego: Plugin = async ({ directory, client }) => {
     console.log("[superego] No prompt.md found, evaluation disabled");
   }
 
-  const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.log("[superego] No GOOGLE_API_KEY set, evaluation disabled");
-  }
-
   return {
     event: async ({ event }) => {
       // Session created - inject contract
@@ -73,9 +66,13 @@ export const Superego: Plugin = async ({ directory, client }) => {
 
         if (sessionId) {
           try {
+            // Inject contract without triggering response (noReply: true)
             await client.session.prompt({
-              body: { sessionID: sessionId, content: SUPEREGO_CONTRACT },
-              query: { assistant: false },
+              path: { id: sessionId },
+              body: {
+                noReply: true,
+                parts: [{ type: "text", text: SUPEREGO_CONTRACT }],
+              },
             });
             console.log("[superego] Contract injected");
           } catch (e) {
@@ -88,12 +85,12 @@ export const Superego: Plugin = async ({ directory, client }) => {
       // NEEDS VALIDATION: Does session.idle fire? What's the actual message structure?
       if (event.type === "session.idle") {
         const sessionId = (event as any).properties?.id;
-        if (!sessionId || !prompt || !apiKey) return;
+        if (!sessionId || !prompt) return;
 
         console.log(`[superego] Session idle: ${sessionId}, evaluating...`);
 
         try {
-          // NEEDS VALIDATION: What does client.session.messages() actually return?
+          // Get conversation messages
           const messages = await client.session.messages({ path: { id: sessionId } });
           console.log(`[superego] Got ${messages?.length || 0} messages`);
           if (messages?.length) {
@@ -105,6 +102,7 @@ export const Superego: Plugin = async ({ directory, client }) => {
             return;
           }
 
+          // Format conversation for evaluation
           // NEEDS VALIDATION: Is this the right structure for messages?
           const conversation = messages
             .map((m: any) => {
@@ -114,15 +112,38 @@ export const Superego: Plugin = async ({ directory, client }) => {
             })
             .join("\n\n---\n\n");
 
-          // Call Gemini
-          const genAI = new GoogleGenerativeAI(apiKey);
-          const model = genAI.getGenerativeModel({ model: DEFAULT_MODEL });
+          // Create eval session and get response via OpenCode's configured LLM
+          console.log("[superego] Creating eval session...");
+          const evalSession = await client.session.create({ body: { directory } });
+          const evalSessionId = (evalSession as any)?.id;
+
+          if (!evalSessionId) {
+            console.error("[superego] Failed to create eval session");
+            return;
+          }
+
           const evalPrompt = `${prompt}\n\n---\n\n## Conversation to Evaluate\n\n${conversation}`;
 
-          console.log("[superego] Calling Gemini...");
-          const result = await model.generateContent(evalPrompt);
-          const response = result.response.text();
-          console.log("[superego] Gemini response:", response.slice(0, 200));
+          console.log("[superego] Calling LLM via OpenCode...");
+          // session.prompt() returns the AssistantMessage response directly
+          const result = await client.session.prompt({
+            path: { id: evalSessionId },
+            body: {
+              parts: [{ type: "text", text: evalPrompt }],
+            },
+          });
+
+          // Extract response text
+          // NEEDS VALIDATION: What's the actual response structure?
+          const response = (result as any)?.parts?.map((p: any) => p.text || p.content || "").join("\n") || "";
+          console.log("[superego] LLM response:", response.slice(0, 200));
+
+          // Clean up eval session
+          try {
+            await client.session.delete({ path: { id: evalSessionId } });
+          } catch {
+            // Ignore cleanup errors
+          }
 
           const { block, feedback } = parseDecision(response);
           console.log(`[superego] Decision: ${block ? "BLOCK" : "ALLOW"}`);

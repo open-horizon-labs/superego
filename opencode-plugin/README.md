@@ -64,10 +64,7 @@ cp dist/index.js /path/to/your/project/.opencode/plugin/superego.js
 mkdir -p ~/.config/opencode/plugin
 cp dist/index.js ~/.config/opencode/plugin/superego.js
 
-# 3. Set Gemini API key
-export GOOGLE_API_KEY="your-key-here"
-
-# 4. Ensure project has .superego/ initialized
+# 3. Ensure project has .superego/ initialized
 # (prompt.md is required for evaluation)
 ```
 
@@ -78,13 +75,13 @@ export GOOGLE_API_KEY="your-key-here"
 3. **Contract injection**: Look for `[superego] Contract injected`
 4. **Session idle**: After model finishes, look for `[superego] Session idle: <id>`
 5. **Message structure**: Plugin logs first message structure for validation
-6. **Gemini call**: Look for `[superego] Calling Gemini...` and response
+6. **LLM call**: Look for `[superego] Calling LLM via OpenCode...` and response
 
 ## Configuration
 
 Requires:
 - `.superego/prompt.md` - evaluation criteria (same as Claude Code)
-- `GOOGLE_API_KEY` or `GEMINI_API_KEY` env var
+- OpenCode configured with an LLM provider (uses whatever model OpenCode is configured with)
 
 ## Known Limitations (Needs Validation)
 
