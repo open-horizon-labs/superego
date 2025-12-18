@@ -74,10 +74,8 @@ pub fn migrate(base_dir: &Path) -> Result<MigrateReport, MigrateError> {
     }
 
     // Remove superego entries from settings.json
-    if settings_path.exists() {
-        if remove_superego_from_settings(&settings_path)? {
-            report.updated_settings = true;
-        }
+    if settings_path.exists() && remove_superego_from_settings(&settings_path)? {
+        report.updated_settings = true;
     }
 
     Ok(report)
