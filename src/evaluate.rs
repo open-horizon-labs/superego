@@ -241,7 +241,8 @@ pub fn evaluate_llm(
         let queue = FeedbackQueue::new(&session_dir);
         let fb = Feedback::warning(&feedback);
         if let Err(e) = queue.write(&fb) {
-            eprintln!("Warning: failed to write feedback: {}", e);
+            eprintln!("ERROR: failed to write feedback file: {}", e);
+            eprintln!("FEEDBACK CONTENT (fallback):\n{}", feedback);
         }
         // Record to decision journal for audit trail (session-namespaced per user requirement)
         let journal = Journal::new(&session_dir);

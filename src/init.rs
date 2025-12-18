@@ -73,9 +73,8 @@ pub fn init_at(base_dir: &Path, force: bool) -> Result<(), InitError> {
         return Err(InitError::AlreadyExists);
     }
 
-    // Create directory structure
-    fs::create_dir_all(superego_dir.join("decisions"))?;
-    fs::create_dir_all(superego_dir.join("session"))?;
+    // Create .superego directory (subdirs created on-demand)
+    fs::create_dir_all(&superego_dir)?;
 
     // Write default prompt
     fs::write(superego_dir.join("prompt.md"), DEFAULT_PROMPT)?;
@@ -261,8 +260,6 @@ mod tests {
         init_at(dir.path(), false).unwrap();
 
         assert!(dir.path().join(".superego").exists());
-        assert!(dir.path().join(".superego/decisions").exists());
-        assert!(dir.path().join(".superego/session").exists());
         assert!(dir.path().join(".superego/prompt.md").exists());
         assert!(dir.path().join(".superego/state.json").exists());
         assert!(dir.path().join(".superego/config.yaml").exists());
