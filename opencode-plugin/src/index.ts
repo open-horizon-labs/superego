@@ -161,9 +161,8 @@ export const Superego: Plugin = async ({ directory, client }) => {
       }
 
       // Session created - inject contract
-      // NEEDS VALIDATION: Does session.created fire? Is properties.id correct?
       if (event.type === "session.created") {
-        const sessionId = (event as any).properties?.id;
+        const sessionId = (event as any).properties?.info?.id;
         log(superegoDir, `Session created: ${sessionId}`);
 
         if (sessionId) {
@@ -184,9 +183,8 @@ export const Superego: Plugin = async ({ directory, client }) => {
       }
 
       // Session idle - run evaluation
-      // NEEDS VALIDATION: Does session.idle fire? What's the actual message structure?
       if (event.type === "session.idle") {
-        const sessionId = (event as any).properties?.id;
+        const sessionId = (event as any).properties?.info?.id;
         if (!sessionId || !prompt) return;
 
         log(superegoDir, `Session idle: ${sessionId}, evaluating...`);
