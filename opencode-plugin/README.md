@@ -10,7 +10,7 @@ This plugin enables superego's metacognitive oversight for OpenCode users, using
 
 Superego uses a **shared core with adapters** pattern:
 
-```
+```text
 .superego/                    # Shared core (language-agnostic)
 ├── prompt.md                 # Evaluation criteria
 ├── config.yaml               # Settings (threshold, model, etc.)

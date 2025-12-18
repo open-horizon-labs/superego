@@ -13,9 +13,9 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "@opencode-ai/plugin": "latest",
-    "@types/bun": "latest",
-    "typescript": "^5.0.0"
+    "@opencode-ai/plugin": "^1.0.61",
+    "@types/bun": "^1.2.4",
+    "typescript": "^5.7.0"
   },
   "peerDependencies": {
     "bun": ">=1.0.0"
