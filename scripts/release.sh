@@ -115,6 +115,15 @@ if ! jq -e --arg v "$VERSION" '.plugins[0].version == $v' "$MARKETPLACE_JSON" > 
     error "Failed to update plugin version in $MARKETPLACE_JSON"
 fi
 
+# Update opencode plugin version
+OPENCODE_JSON="opencode-plugin/package.json"
+log "Updating opencode plugin version in $OPENCODE_JSON..."
+sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$OPENCODE_JSON"
+
+if ! grep -q "\"version\": \"$VERSION\"" "$OPENCODE_JSON"; then
+    error "Failed to update version in $OPENCODE_JSON"
+fi
+
 # Step 2: Run tests
 log "Running tests..."
 cargo test || error "Tests failed"
@@ -125,7 +134,7 @@ cargo build --release || error "Build failed"
 
 # Step 4: Commit version bump (if needed)
 log "Committing version bump..."
-git add Cargo.toml "$PLUGIN_JSON" "$MARKETPLACE_JSON"
+git add Cargo.toml "$PLUGIN_JSON" "$MARKETPLACE_JSON" "$OPENCODE_JSON"
 if git diff --cached --quiet; then
     log "Version already at $VERSION, skipping commit"
 else
