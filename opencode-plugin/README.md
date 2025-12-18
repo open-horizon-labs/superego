@@ -56,7 +56,7 @@ opencode-plugin/              # OpenCode adapter (TypeScript)
 cd /path/to/your/project
 
 # 1. Download pre-built plugin
-curl -L -o superego.js https://github.com/cloud-atlas-ai/superego/releases/download/v0.4.1-alpha/index.js
+curl -L -o superego.js https://github.com/cloud-atlas-ai/superego/releases/download/v0.4.2-alpha/index.js
 
 # 2. Install plugin
 mkdir -p .opencode/plugin
@@ -90,7 +90,7 @@ opencode
 
 ```bash
 # 1. Download plugin
-curl -L -o superego.js https://github.com/cloud-atlas-ai/superego/releases/download/v0.4.1-alpha/index.js
+curl -L -o superego.js https://github.com/cloud-atlas-ai/superego/releases/download/v0.4.2-alpha/index.js
 
 # 2. Install globally
 mkdir -p ~/.config/opencode/plugin
