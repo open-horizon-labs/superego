@@ -39,3 +39,23 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --all -- --check
+
+  build-opencode-plugin:
+    name: Build OpenCode Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        working-directory: opencode-plugin
+        run: bun install
+      - name: Build plugin
+        working-directory: opencode-plugin
+        run: bun build src/index.ts --outdir dist --target bun
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: superego-opencode-plugin
+          path: opencode-plugin/dist/index.js

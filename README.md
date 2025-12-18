@@ -1,10 +1,14 @@
 # Superego
 
-A metacognitive advisor for Claude Code. Monitors conversations, evaluates Claude's approach, and provides feedback that Claude sees and acts on before finishing.
+A metacognitive advisor for AI coding assistants. Monitors conversations, evaluates the assistant's approach, and provides feedback before finishing.
+
+**Supported platforms:**
+- **Claude Code** - Full support via plugin
+- **OpenCode** - Alpha support via TypeScript plugin (see [opencode-plugin/](opencode-plugin/))
 
 ## What It Does
 
-When you use Claude Code with superego enabled:
+When you use Claude Code (or OpenCode) with superego enabled:
 
 1. **Session starts** - Claude is told superego is active and to take feedback seriously
 2. **Claude works** - You interact normally with Claude

@@ -103,7 +103,10 @@ fn parse_decision_response(response: &str) -> (bool, String) {
                 "BLOCK" => return (true, feedback),
                 _ => {
                     // Unknown decision, default to block
-                    eprintln!("Warning: Unknown decision '{}', defaulting to BLOCK", decision);
+                    eprintln!(
+                        "Warning: Unknown decision '{}', defaulting to BLOCK",
+                        decision
+                    );
                     return (true, feedback);
                 }
             }

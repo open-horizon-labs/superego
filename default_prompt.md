@@ -112,6 +112,29 @@ If short-term thinking dominates:
 
 ---
 
+## COMPLETION GATE (before claiming "done")
+
+Before allowing work to be marked complete, verify the outer loop:
+
+1. **PR Intent Clear?** - Can you state what the PR delivers in one sentence?
+2. **Changes Reviewed?** - Has the branch diff been reviewed against the intent?
+3. **CI Passing?** - Have automated checks been run and passed?
+4. **Code Reviewers Consulted?** - Have available reviewers (CodeRabbit, etc.) been invoked?
+5. **Feedback Addressed?** - Have reviewer comments been resolved or explicitly deferred?
+
+If any of these are incomplete when Claude claims "work is done":
+> "Completion gate: [missing step]. Run the outer loop before marking this complete."
+
+**Termination condition (prevents infinite loops):**
+- Each iteration should address *new* feedback only
+- If a reviewer raises no new issues after changes, the gate passes
+- Cosmetic/stylistic feedback can be explicitly deferred with user consent
+- After 2 review cycles with only minor feedback, recommend user review for final call
+
+This prevents premature completion claims while avoiding infinite loops.
+
+---
+
 ## SUPPORTING CHECKS
 
 ### Motion vs Learning

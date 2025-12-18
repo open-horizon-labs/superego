@@ -324,6 +324,9 @@ mod tests {
     fn test_dedupe_system_reminders_three() {
         // Three reminders: keep only the last
         let text = "<system-reminder>1</system-reminder>A<system-reminder>2</system-reminder>B<system-reminder>3</system-reminder>";
-        assert_eq!(dedupe_system_reminders(text), "AB<system-reminder>3</system-reminder>");
+        assert_eq!(
+            dedupe_system_reminders(text),
+            "AB<system-reminder>3</system-reminder>"
+        );
     }
 }

@@ -1,0 +1,23 @@
+{
+  "name": "superego-opencode",
+  "version": "0.1.0",
+  "description": "Superego metacognitive advisor plugin for OpenCode",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "dev": "bun run src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.0.61",
+    "@types/bun": "^1.2.4",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "bun": ">=1.0.0"
+  }
+}
