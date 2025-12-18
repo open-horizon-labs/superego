@@ -48,34 +48,69 @@ opencode-plugin/              # OpenCode adapter (TypeScript)
 | Pre-tool evaluation | `PreToolUse` | `tool.execute.before` |
 | Final evaluation | `Stop` | `session.idle` |
 
-## Installation & Testing
+## Quick Start
+
+### Option A: Project-level install (recommended)
 
 ```bash
-# 1. Build the plugin
-cd opencode-plugin
+# In your project directory
+cd /path/to/your/project
+
+# 1. Clone and build the plugin
+git clone https://github.com/cloud-atlas-ai/superego.git /tmp/superego
+cd /tmp/superego/opencode-plugin
 bun install
 bun build src/index.ts --outdir dist --target bun
 
-# 2. Copy to OpenCode plugin directory (project-level)
+# 2. Install to your project
 mkdir -p /path/to/your/project/.opencode/plugin
 cp dist/index.js /path/to/your/project/.opencode/plugin/superego.js
 
-# Or global:
+# 3. Initialize superego config
+mkdir -p /path/to/your/project/.superego
+cp /tmp/superego/default_prompt.md /path/to/your/project/.superego/prompt.md
+
+# 4. Start OpenCode
+opencode
+```
+
+### Option B: Global install (all projects)
+
+```bash
+# 1. Clone and build the plugin
+git clone https://github.com/cloud-atlas-ai/superego.git /tmp/superego
+cd /tmp/superego/opencode-plugin
+bun install
+bun build src/index.ts --outdir dist --target bun
+
+# 2. Install globally
 mkdir -p ~/.config/opencode/plugin
 cp dist/index.js ~/.config/opencode/plugin/superego.js
 
-# 3. Ensure project has .superego/ initialized
-# (prompt.md is required for evaluation)
+# 3. Initialize superego in each project you want oversight
+cd /path/to/your/project
+mkdir -p .superego
+cp /tmp/superego/default_prompt.md .superego/prompt.md
 ```
 
-## What to Test
+## Test Plan
 
-1. **Plugin loads**: Look for `[superego] Plugin loaded` in console
-2. **Session created**: Look for `[superego] Session created: <id>`
-3. **Contract injection**: Look for `[superego] Contract injected`
-4. **Session idle**: After model finishes, look for `[superego] Session idle: <id>`
-5. **Message structure**: Plugin logs first message structure for validation
-6. **LLM call**: Look for `[superego] Calling LLM via OpenCode...` and response
+After installation, verify each step in order:
+
+| Step | What to do | Expected log output |
+|------|------------|---------------------|
+| 1. Plugin loads | Start OpenCode in a project with `.superego/` | `[superego] Plugin loaded` |
+| 2. Session created | Start a new chat | `[superego] Session created: <uuid>` |
+| 3. Contract injected | (automatic) | `[superego] Contract injected` |
+| 4. Have a conversation | Ask OpenCode to do something, wait for response | `[superego] Session idle: <uuid>` |
+| 5. Evaluation runs | (automatic on idle) | `[superego] Got N messages`, `[superego] Calling LLM via OpenCode...` |
+| 6. Response logged | (automatic) | `[superego] LLM response: DECISION: ALLOW...` or `BLOCK...` |
+
+### Troubleshooting
+
+- **"Not initialized, skipping"**: Create `.superego/` directory with `prompt.md`
+- **"No prompt.md found"**: Copy `default_prompt.md` to `.superego/prompt.md`
+- **No logs at all**: Check OpenCode console output, verify plugin file is named `superego.js`
 
 ## Configuration
 
