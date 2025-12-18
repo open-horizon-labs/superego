@@ -19,22 +19,69 @@ This creates feedback loops where Claude can course-correct both during work and
 ## Quickstart
 
 ```bash
-# Install via Cargo
-cargo install superego
+# 1. Install the Claude Code plugin
+/plugin marketplace add cloud-atlas-ai/superego
+/plugin install superego@superego
 
-# Or install via Homebrew
-brew tap cloud-atlas-ai/superego
-brew install superego
-
-# Initialize in your project
-cd /path/to/your/project
-sg init
-
-# Start Claude Code - superego is now active
-claude
+# 2. Initialize in your project (installs binary if needed)
+/superego:init
 ```
 
-That's it. Superego runs automatically via Claude Code hooks.
+That's it. The `/superego:init` command detects if the binary is missing and offers to install it via Homebrew or Cargo.
+
+## Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/superego:init` | Initialize superego for this project (offers binary install if needed) |
+| `/superego:status` | Check if plugin, binary, and project are configured |
+| `/superego:enable` | Enable superego (offers init if not set up) |
+| `/superego:disable` | Temporarily disable for current session |
+| `/superego:remove` | Remove superego from project |
+
+## Manual Installation
+
+If you prefer to install the binary manually:
+
+**Homebrew (macOS):**
+```bash
+brew install cloud-atlas-ai/superego/superego
+```
+
+**Cargo (cross-platform):**
+```bash
+cargo install superego
+```
+
+**From source:**
+```bash
+git clone https://github.com/cloud-atlas-ai/superego.git
+cd superego
+cargo install --path .
+```
+
+Then run `sg init` in your project to create the `.superego/` configuration.
+
+## Plugin Installation Details
+
+Claude Code uses a marketplace system for plugins. The superego plugin contains hook scripts that run automatically.
+
+**From GitHub (recommended):**
+```bash
+/plugin marketplace add cloud-atlas-ai/superego
+/plugin install superego@superego
+```
+
+**From a local clone (for development):**
+```bash
+/plugin marketplace add /absolute/path/to/superego
+/plugin install superego@superego
+```
+
+The plugin includes:
+- `hooks/hooks.json` - Defines which events trigger superego
+- `scripts/*.sh` - Hook scripts that call the `sg` binary
+- `commands/*.md` - Slash commands for superego management
 
 ## What You'll See
 
@@ -75,8 +122,17 @@ sg evaluate-llm --transcript-path ~/.claude/projects/<project>/transcript.jsonl
 
 ### Reset everything
 ```bash
-sg reset    # Removes all superego files and hooks
+sg reset    # Removes .superego/ directory
 sg init     # Fresh start
+```
+
+### Migrating from legacy hooks
+
+If you previously used `sg init` before v0.4.0 (which created `.claude/hooks/superego/`):
+```bash
+/plugin marketplace add cloud-atlas-ai/superego
+/plugin install superego@superego
+sg migrate  # Remove legacy hooks
 ```
 
 ## Customization
@@ -97,8 +153,9 @@ Edit `.superego/prompt.md` to customize what superego evaluates:
 SessionStart hook
     └── Injects contract: "SUPEREGO ACTIVE: critically evaluate feedback..."
 
-PreToolUse hook (before Edit/Write)
-    ├── Checks change size (lines added/modified)
+PreToolUse hook (before any tool)
+    ├── Checks if periodic eval is due (time-based)
+    ├── For Edit/Write: checks change size (lines added/modified)
     ├── If >= threshold (default 20): runs sg evaluate-llm with pending change
     ├── If concerns: returns {"decision":"block","reason":"SUPEREGO FEEDBACK: ..."}
     │   └── Claude sees feedback, reconsiders the change
@@ -119,8 +176,9 @@ PreCompact hook (before context truncation)
 ## Commands
 
 ```bash
-sg init              # Initialize superego (creates .superego/, configures hooks)
-sg reset             # Remove all superego files and hooks
+sg init              # Initialize superego (creates .superego/)
+sg migrate           # Remove legacy hooks (for users upgrading from < v0.4.0)
+sg reset             # Remove .superego/ directory
 sg evaluate-llm      # Run LLM evaluation (called by hooks)
 sg has-feedback      # Check for pending feedback (exit 0=yes, 1=no)
 sg get-feedback      # Get and clear pending feedback
@@ -131,7 +189,7 @@ sg --version         # Show version
 
 - Claude Code CLI
 - `jq` (for hook JSON parsing)
-- Rust toolchain (to build)
+- Rust toolchain (to build from source) or Homebrew (for pre-built binary)
 
 ## License
 

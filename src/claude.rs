@@ -118,6 +118,7 @@ pub fn invoke(
     // wait_with_output() returns empty and JSON parsing fails with EOF.
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
+    cmd.stdin(Stdio::null());
 
     // Execute with timeout (default 5 minutes)
     let timeout = Duration::from_millis(options.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS));

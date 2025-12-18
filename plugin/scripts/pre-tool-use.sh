@@ -5,21 +5,41 @@
 # AIDEV-NOTE: Only triggers on Edit/Write over threshold. Passes the
 # proposed change to sg evaluate-llm along with transcript context.
 
+# Check for sg binary
+if ! command -v sg &> /dev/null; then
+    echo "sg binary not found. Install: cargo install superego" >&2
+    exit 0
+fi
+
+# Use CLAUDE_PROJECT_DIR if available, otherwise current directory
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
+
 # Debug log function
 log() {
-    echo "[$(date '+%H:%M:%S')] [pre-tool] $1" >> .superego/hook.log 2>/dev/null
+    echo "[$(date '+%H:%M:%S')] [pre-tool] $1" >> "$PROJECT_DIR/.superego/hook.log" 2>/dev/null
 }
 
 # Read hook input from stdin
 INPUT=$(cat)
 
+# Debug logging (only if SUPEREGO_DEBUG is set)
+debug_log() {
+    if [ "${SUPEREGO_DEBUG:-}" = "1" ]; then
+        echo "[$(date '+%H:%M:%S')] [pre-tool] $1" >> /tmp/superego-debug.log 2>&1
+    fi
+}
+
+debug_log "Hook called, PROJECT_DIR=$PROJECT_DIR"
+
 # Skip if superego is disabled
 if [ "$SUPEREGO_DISABLED" = "1" ]; then
+    debug_log "SKIP: SUPEREGO_DISABLED=1"
     exit 0
 fi
 
 # Check if superego is initialized
-if [ ! -d ".superego" ]; then
+if [ ! -d "$PROJECT_DIR/.superego" ]; then
+    debug_log "SKIP: $PROJECT_DIR/.superego not found"
     exit 0
 fi
 
@@ -28,44 +48,16 @@ SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // ""')
 
 # Build session-namespaced paths
 if [ -n "$SESSION_ID" ] && [ "$SESSION_ID" != "null" ]; then
-    SESSION_DIR=".superego/sessions/$SESSION_ID"
+    SESSION_DIR="$PROJECT_DIR/.superego/sessions/$SESSION_ID"
     mkdir -p "$SESSION_DIR"
     FEEDBACK_PATH="$SESSION_DIR/feedback"
 else
     SESSION_ID=""
-    FEEDBACK_PATH=".superego/feedback"
+    FEEDBACK_PATH="$PROJECT_DIR/.superego/feedback"
 fi
 
-# --- Periodic eval check (catch drift from many small changes) ---
-if [ -n "$SESSION_ID" ]; then
-    SHOULD_EVAL=$(sg should-eval --session-id "$SESSION_ID" 2>/dev/null && echo "yes" || echo "no")
-else
-    SHOULD_EVAL=$(sg should-eval 2>/dev/null && echo "yes" || echo "no")
-fi
-
-if [ "$SHOULD_EVAL" = "yes" ]; then
-    log "Periodic eval triggered (time threshold)"
-    TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // ""')
-    if [ -n "$TRANSCRIPT_PATH" ] && [ "$TRANSCRIPT_PATH" != "null" ]; then
-        if [ -n "$SESSION_ID" ]; then
-            sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" --session-id "$SESSION_ID" 2>> .superego/hook.log
-        else
-            sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" 2>> .superego/hook.log
-        fi
-        if [ -s "$FEEDBACK_PATH" ]; then
-            FEEDBACK=$(cat "$FEEDBACK_PATH")
-            rm -f "$FEEDBACK_PATH"
-            log "Periodic eval blocking: ${FEEDBACK:0:100}..."
-            REASON="SUPEREGO FEEDBACK (periodic check):
-
-$FEEDBACK"
-            jq -n --arg reason "$REASON" '{"decision":"block","reason":$reason,"suppressOutput":true}'
-            exit 1
-        fi
-    fi
-fi
-
-# --- Large edit check (existing logic) ---
+# PreToolUse only evaluates LARGE edits, not periodic drift
+# Periodic evaluations are handled by Stop/PreCompact hooks
 
 # Get tool info
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // ""')
@@ -128,17 +120,31 @@ fi
 if [ -n "$SESSION_ID" ]; then
     PENDING_CHANGE_PATH="$SESSION_DIR/pending_change.txt"
 else
-    PENDING_CHANGE_PATH=".superego/pending_change.txt"
+    PENDING_CHANGE_PATH="$PROJECT_DIR/.superego/pending_change.txt"
 fi
 echo "$CHANGE_CONTEXT" > "$PENDING_CHANGE_PATH"
 
-# Run evaluation with transcript context
+# Run evaluation with transcript context (redirect all output to log)
+# Atomic lock to prevent duplicate evaluations
 if [ -n "$SESSION_ID" ]; then
-    log "Running: sg evaluate-llm --session-id $SESSION_ID with pending change"
-    RESULT=$(sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" --session-id "$SESSION_ID" 2>> .superego/hook.log)
+    LOCK_FILE="$SESSION_DIR/eval.lock"
 else
-    log "Running: sg evaluate-llm with pending change"
-    RESULT=$(sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" 2>> .superego/hook.log)
+    LOCK_FILE="$PROJECT_DIR/.superego/eval.lock"
+fi
+if mkdir "$LOCK_FILE" 2>/dev/null; then
+    # Got lock, run evaluation
+    trap 'rmdir "$LOCK_FILE" 2>/dev/null' EXIT
+    if [ -n "$SESSION_ID" ]; then
+        log "Running: sg evaluate-llm --session-id $SESSION_ID with pending change"
+        sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" --session-id "$SESSION_ID" >> "$PROJECT_DIR/.superego/hook.log" 2>&1
+    else
+        log "Running: sg evaluate-llm with pending change"
+        sg evaluate-llm --transcript-path "$TRANSCRIPT_PATH" >> "$PROJECT_DIR/.superego/hook.log" 2>&1
+    fi
+    rmdir "$LOCK_FILE" 2>/dev/null
+else
+    log "Eval already in progress (large edit check), skipping"
+    exit 0
 fi
 EXIT_CODE=$?
 
@@ -151,12 +157,16 @@ fi
 
 log "Evaluation complete"
 
-# Check if there's feedback
+# Check if there's feedback (atomic move to prevent race conditions)
 if [ -s "$FEEDBACK_PATH" ]; then
-    FEEDBACK=$(cat "$FEEDBACK_PATH")
+    TEMP_FEEDBACK="$FEEDBACK_PATH.$$"
+    if ! mv "$FEEDBACK_PATH" "$TEMP_FEEDBACK" 2>/dev/null; then
+        log "Feedback already claimed"
+        exit 0
+    fi
+    FEEDBACK=$(cat "$TEMP_FEEDBACK")
     log "Blocking with feedback: ${FEEDBACK:0:100}..."
-
-    rm -f "$FEEDBACK_PATH"
+    rm -f "$TEMP_FEEDBACK"
 
     REASON="SUPEREGO FEEDBACK on proposed $TOOL_NAME to $FILE_PATH:
 
@@ -164,7 +174,7 @@ $FEEDBACK
 
 Please reconsider the change or explain why it's appropriate."
 
-    OUTPUT=$(jq -n --arg reason "$REASON" '{"decision":"block","reason":$reason,"suppressOutput":true}')
+    OUTPUT=$(jq -n --arg reason "$REASON" '{"decision":"block","reason":$reason}')
     log "Outputting: $OUTPUT"
     echo "$OUTPUT"
     exit 1

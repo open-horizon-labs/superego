@@ -9,6 +9,7 @@ mod evaluate;
 mod feedback;
 mod hooks;
 mod init;
+mod migrate;
 mod state;
 mod transcript;
 
@@ -86,28 +87,42 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+
+    /// Migrate from legacy hooks to plugin mode
+    Migrate,
 }
 
 fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Init { force } => match init::init(force) {
-            Ok(()) => {
-                println!("Superego initialized:");
-                println!("  .superego/prompt.md   - system prompt (customize as needed)");
-                println!("  .claude/settings.json - hooks configured");
-                println!("\nReady to use. Superego will evaluate after each Claude response.");
+        Commands::Init { force } => {
+            // Check for legacy hooks before initializing
+            let has_legacy = migrate::has_legacy_hooks(Path::new("."));
+
+            match init::init(force) {
+                Ok(()) => {
+                    println!("Superego initialized:");
+                    println!("  .superego/prompt.md   - system prompt (customize as needed)");
+                    println!("  .superego/config.yaml - configuration");
+
+                    if has_legacy {
+                        println!("\n⚠️  Legacy hooks detected from a previous installation.");
+                        println!("   Run 'sg migrate' to remove them.");
+                    }
+
+                    println!("\nSuperego is ready. Hooks will activate on next session start.");
+                }
+                Err(init::InitError::AlreadyExists) => {
+                    eprintln!(".superego/ already exists. Use --force to reinitialize.");
+                    std::process::exit(1);
+                }
+                Err(e) => {
+                    eprintln!("Error initializing: {}", e);
+                    std::process::exit(1);
+                }
             }
-            Err(init::InitError::AlreadyExists) => {
-                eprintln!(".superego/ already exists. Use --force to reinitialize.");
-                std::process::exit(1);
-            }
-            Err(e) => {
-                eprintln!("Error initializing: {}", e);
-                std::process::exit(1);
-            }
-        },
+        }
         Commands::Evaluate { transcript_path } => {
             // AIDEV-NOTE: This command now redirects to evaluate-llm
             // The old phase-based evaluation is removed.
@@ -432,6 +447,26 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("Audit failed: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::Migrate => {
+            let base_dir = Path::new(".");
+            match migrate::migrate(base_dir) {
+                Ok(report) => {
+                    println!("Migration complete:\n{}", report.summary());
+                    println!("\nYour .superego/ configuration is preserved.");
+                    println!("Hooks will now be provided by the superego plugin.");
+                    println!("\nIf you haven't already, install the plugin:");
+                    println!("  /plugin marketplace add cloud-atlas-ai/superego");
+                    println!("  /plugin install superego@superego");
+                }
+                Err(migrate::MigrateError::NoLegacyHooks) => {
+                    println!("No legacy hooks found. Nothing to migrate.");
+                }
+                Err(e) => {
+                    eprintln!("Migration failed: {}", e);
                     std::process::exit(1);
                 }
             }

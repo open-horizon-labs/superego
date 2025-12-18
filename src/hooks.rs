@@ -12,10 +12,10 @@ use std::path::Path;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-/// Embedded hook scripts (same as init.rs)
-const EVALUATE_HOOK: &str = include_str!("../hooks/evaluate.sh");
-const SESSION_START_HOOK: &str = include_str!("../hooks/session-start.sh");
-const PRE_TOOL_USE_HOOK: &str = include_str!("../hooks/pre-tool-use.sh");
+/// Embedded hook scripts (from plugin/scripts/ for legacy support)
+const EVALUATE_HOOK: &str = include_str!("../plugin/scripts/evaluate.sh");
+const SESSION_START_HOOK: &str = include_str!("../plugin/scripts/session-start.sh");
+const PRE_TOOL_USE_HOOK: &str = include_str!("../plugin/scripts/pre-tool-use.sh");
 
 /// Result of checking/updating hooks
 #[derive(Debug, Default)]
