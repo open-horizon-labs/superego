@@ -247,7 +247,6 @@ export const Superego: Plugin = async ({ directory, client }) => {
           if (block && feedback) {
             writeFeedback(directory, sessionId, feedback);
             log(superegoDir, `Feedback written to .superego/sessions/${sessionId}/feedback`);
-            // TODO: Find way to surface feedback to user in OpenCode UI
           }
         } catch (e) {
           log(superegoDir, `ERROR: Evaluation failed: ${e}`);
