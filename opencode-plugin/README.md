@@ -48,26 +48,56 @@ opencode-plugin/              # OpenCode adapter (TypeScript)
 | Pre-tool evaluation | `PreToolUse` | `tool.execute.before` |
 | Final evaluation | `Stop` | `session.idle` |
 
-## Installation
+## Installation & Testing
 
 ```bash
-# Copy plugin to OpenCode plugin directory
-cp -r opencode-plugin/.opencode ~/.config/opencode/
+# 1. Build the plugin
+cd opencode-plugin
+bun install
+bun build src/index.ts --outdir dist --target bun
+
+# 2. Copy to OpenCode plugin directory (project-level)
+mkdir -p /path/to/your/project/.opencode/plugin
+cp dist/index.js /path/to/your/project/.opencode/plugin/superego.js
+
+# Or global:
+mkdir -p ~/.config/opencode/plugin
+cp dist/index.js ~/.config/opencode/plugin/superego.js
+
+# 3. Set Gemini API key
+export GOOGLE_API_KEY="your-key-here"
+
+# 4. Ensure project has .superego/ initialized
+# (prompt.md is required for evaluation)
 ```
+
+## What to Test
+
+1. **Plugin loads**: Look for `[superego] Plugin loaded` in console
+2. **Session created**: Look for `[superego] Session created: <id>`
+3. **Contract injection**: Look for `[superego] Contract injected`
+4. **Session idle**: After model finishes, look for `[superego] Session idle: <id>`
+5. **Message structure**: Plugin logs first message structure for validation
+6. **Gemini call**: Look for `[superego] Calling Gemini...` and response
 
 ## Configuration
 
-Uses the same `.superego/config.yaml` as Claude Code:
+Requires:
+- `.superego/prompt.md` - evaluation criteria (same as Claude Code)
+- `GOOGLE_API_KEY` or `GEMINI_API_KEY` env var
 
-```yaml
-# LLM backend for evaluation (OpenCode adapter)
-eval_model: gemini-2.5-pro  # or: claude, gpt-4, ollama/llama3, etc.
-```
+## Known Limitations (Needs Validation)
+
+- `session.created` event structure assumed (`properties.id`)
+- `client.session.messages()` response structure assumed
+- `client.session.prompt()` API for contract injection untested
+- No UI notification for feedback (writes to file only)
 
 ## Development
 
 ```bash
 cd opencode-plugin
 bun install
-bun test
+bun run typecheck  # Check types
+bun build src/index.ts --outdir dist --target bun
 ```
