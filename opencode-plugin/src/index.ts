@@ -77,16 +77,14 @@ function formatConversation(messages: any[]): string {
 
 export const Superego: Plugin = async ({ directory, client }) => {
   const superegoDir = join(directory, SUPEREGO_DIR);
+  const initialized = existsSync(superegoDir);
 
-  // Skip if not initialized (can't log yet - no .superego dir)
-  if (!existsSync(superegoDir)) {
-    return {};
+  if (initialized) {
+    log(superegoDir, "Plugin loaded");
   }
 
-  log(superegoDir, "Plugin loaded");
-
-  const prompt = loadPrompt(directory);
-  if (!prompt) {
+  const prompt = initialized ? loadPrompt(directory) : null;
+  if (initialized && !prompt) {
     log(superegoDir, "No prompt.md found, evaluation disabled");
   }
 
@@ -155,10 +153,11 @@ export const Superego: Plugin = async ({ directory, client }) => {
       }),
     },
     event: async ({ event }) => {
-      // Check if disabled
+      // Skip if not initialized or disabled
+      if (!initialized) return;
       const disabledFile = join(superegoDir, ".disabled");
       if (existsSync(disabledFile)) {
-        return; // Skip all hooks when disabled
+        return;
       }
 
       // Session created - inject contract
