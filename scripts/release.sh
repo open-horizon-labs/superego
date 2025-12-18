@@ -103,6 +103,18 @@ if ! grep -q "\"version\": \"$VERSION\"" "$PLUGIN_JSON"; then
     error "Failed to update version in $PLUGIN_JSON"
 fi
 
+# Update marketplace plugin version (requires jq)
+MARKETPLACE_JSON=".claude-plugin/marketplace.json"
+log "Updating marketplace plugin version in $MARKETPLACE_JSON..."
+if ! command -v jq &> /dev/null; then
+    error "jq is required for marketplace.json update. Install with: brew install jq"
+fi
+jq --arg v "$VERSION" '.plugins[0].version = $v' "$MARKETPLACE_JSON" > "$MARKETPLACE_JSON.tmp" && mv "$MARKETPLACE_JSON.tmp" "$MARKETPLACE_JSON"
+
+if ! jq -e --arg v "$VERSION" '.plugins[0].version == $v' "$MARKETPLACE_JSON" > /dev/null; then
+    error "Failed to update plugin version in $MARKETPLACE_JSON"
+fi
+
 # Step 2: Run tests
 log "Running tests..."
 cargo test || error "Tests failed"
@@ -113,7 +125,7 @@ cargo build --release || error "Build failed"
 
 # Step 4: Commit version bump (if needed)
 log "Committing version bump..."
-git add Cargo.toml "$PLUGIN_JSON"
+git add Cargo.toml "$PLUGIN_JSON" "$MARKETPLACE_JSON"
 if git diff --cached --quiet; then
     log "Version already at $VERSION, skipping commit"
 else
