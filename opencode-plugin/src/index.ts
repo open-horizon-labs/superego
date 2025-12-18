@@ -12,6 +12,40 @@ import { join } from "path";
 const SUPEREGO_DIR = ".superego";
 const SUPEREGO_CONTRACT = `SUPEREGO ACTIVE: This project uses superego, a metacognitive advisor that monitors your work. When you receive SUPEREGO FEEDBACK, critically evaluate it: if you agree, incorporate it into your approach; if you disagree on non-trivial feedback, escalate to the user explaining both perspectives.`;
 
+const PROMPT_URL = "https://raw.githubusercontent.com/cloud-atlas-ai/superego/main/default_prompt.md";
+
+// Fallback prompt if fetch fails
+const FALLBACK_PROMPT = `# Superego System Prompt
+
+You are **Superego**, a metacognitive advisor. Respond with:
+
+DECISION: [ALLOW or BLOCK]
+
+[Your feedback]
+
+See https://github.com/cloud-atlas-ai/superego for full prompt.
+`;
+
+async function initSuperego(directory: string): Promise<void> {
+  const superegoDir = join(directory, SUPEREGO_DIR);
+  mkdirSync(superegoDir, { recursive: true });
+
+  // Fetch full prompt from GitHub
+  let prompt = FALLBACK_PROMPT;
+  try {
+    const response = await fetch(PROMPT_URL);
+    if (response.ok) {
+      prompt = await response.text();
+      console.log("[superego] Fetched full prompt from GitHub");
+    }
+  } catch (e) {
+    console.log("[superego] Could not fetch prompt, using fallback");
+  }
+
+  writeFileSync(join(superegoDir, "prompt.md"), prompt);
+  console.log(`[superego] Initialized ${superegoDir}/prompt.md`);
+}
+
 function loadPrompt(directory: string): string | null {
   const path = join(directory, SUPEREGO_DIR, "prompt.md");
   if (!existsSync(path)) return null;
@@ -55,9 +89,11 @@ function formatConversation(messages: any[]): string {
 export const Superego: Plugin = async ({ directory, client }) => {
   const superegoDir = join(directory, SUPEREGO_DIR);
 
-  // Skip if not initialized
+  // Auto-initialize if not present
   if (!existsSync(superegoDir)) {
-    console.log("[superego] Not initialized, skipping");
+    await initSuperego(directory);
+    console.log("[superego] ⚠️  First run - please restart OpenCode for hooks to take effect");
+    console.log("[superego] Edit .superego/prompt.md to customize evaluation criteria");
     return {};
   }
 
