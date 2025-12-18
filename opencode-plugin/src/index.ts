@@ -40,6 +40,18 @@ function writeFeedback(directory: string, sessionId: string, feedback: string): 
   writeFileSync(join(sessionDir, "feedback"), feedback);
 }
 
+// Format messages for evaluation prompt
+// NEEDS VALIDATION: Message structure assumed based on OpenCode SDK docs
+function formatConversation(messages: any[]): string {
+  return messages
+    .map((m: any) => {
+      const role = m.info?.role || "unknown";
+      const content = m.parts?.map((p: any) => p.content || "").join("\n") || "";
+      return `${role.toUpperCase()}: ${content}`;
+    })
+    .join("\n\n---\n\n");
+}
+
 export const Superego: Plugin = async ({ directory, client }) => {
   const superegoDir = join(directory, SUPEREGO_DIR);
 
@@ -103,14 +115,7 @@ export const Superego: Plugin = async ({ directory, client }) => {
           }
 
           // Format conversation for evaluation
-          // NEEDS VALIDATION: Is this the right structure for messages?
-          const conversation = messages
-            .map((m: any) => {
-              const role = m.info?.role || "unknown";
-              const content = m.parts?.map((p: any) => p.content || "").join("\n") || "";
-              return `${role.toUpperCase()}: ${content}`;
-            })
-            .join("\n\n---\n\n");
+          const conversation = formatConversation(messages);
 
           // Create eval session and get response via OpenCode's configured LLM
           console.log("[superego] Creating eval session...");
