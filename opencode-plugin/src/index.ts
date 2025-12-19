@@ -36,6 +36,28 @@ See https://github.com/cloud-atlas-ai/superego for full prompt.
 `;
 const SUPEREGO_CONTRACT = `SUPEREGO ACTIVE: This project uses superego, a metacognitive advisor that monitors your work. When you receive SUPEREGO FEEDBACK, critically evaluate it: if you agree, incorporate it into your approach; if you disagree on non-trivial feedback, escalate to the user explaining both perspectives.`;
 
+// Subagent config for eval - no tools, just verification
+const EVAL_AGENT_CONFIG = `---
+description: Superego evaluation agent - verifies conversations without taking action
+mode: subagent
+tools:
+  write: false
+  edit: false
+  bash: false
+---
+
+You are Superego, a metacognitive verifier. Your ONLY job is to evaluate conversations and output a decision.
+
+IMPORTANT: You have NO tools. You cannot and should not attempt to use any tools. Just output text.
+
+Respond with EXACTLY this format:
+
+DECISION: [ALLOW or BLOCK]
+
+[Your feedback explaining the decision]
+`;
+const EVAL_AGENT_NAME = "superego-eval";
+
 function loadPrompt(directory: string): string | null {
   const path = join(directory, SUPEREGO_DIR, "prompt.md");
   if (!existsSync(path)) return null;
@@ -121,17 +143,29 @@ export const Superego: Plugin = async ({ directory, client }) => {
               return `Superego ENABLED. Prompt: ${hasPrompt ? "found" : "missing"}`;
 
             case "init":
-              if (existsSync(superegoDir)) {
-                return "Superego already initialized.";
+              const alreadyExists = existsSync(superegoDir);
+
+              // Create .superego/ and prompt if not exists
+              if (!alreadyExists) {
+                mkdirSync(superegoDir, { recursive: true });
+                let fetchedPrompt = FALLBACK_PROMPT;
+                try {
+                  const response = await fetch(PROMPT_URL);
+                  if (response.ok) fetchedPrompt = await response.text();
+                } catch {}
+                writeFileSync(join(superegoDir, "prompt.md"), fetchedPrompt);
               }
-              mkdirSync(superegoDir, { recursive: true });
-              let fetchedPrompt = FALLBACK_PROMPT;
-              try {
-                const response = await fetch(PROMPT_URL);
-                if (response.ok) fetchedPrompt = await response.text();
-              } catch {}
-              writeFileSync(join(superegoDir, "prompt.md"), fetchedPrompt);
-              return "Superego initialized. Restart OpenCode for hooks to take effect.";
+
+              // Always ensure eval subagent exists (idempotent)
+              const agentDir = join(directory, ".opencode", "agent");
+              const agentFile = join(agentDir, `${EVAL_AGENT_NAME}.md`);
+              mkdirSync(agentDir, { recursive: true });
+              writeFileSync(agentFile, EVAL_AGENT_CONFIG);
+
+              if (alreadyExists) {
+                return "Superego updated: eval subagent installed. Restart OpenCode for changes to take effect.";
+              }
+              return "Superego initialized with eval subagent. Restart OpenCode for hooks to take effect.";
 
             case "disable":
               if (!existsSync(superegoDir)) {
@@ -268,12 +302,12 @@ export const Superego: Plugin = async ({ directory, client }) => {
 
           const evalPrompt = `${prompt}\n\n---\n\n## Conversation to Evaluate\n\n${conversation}`;
 
-          log(superegoDir, `Calling LLM via OpenCode with model ${modelString || "default"}...`);
-          // session.prompt() returns the AssistantMessage response directly
-          // Pass model explicitly to use same model as original session
+          log(superegoDir, `Calling LLM via OpenCode with agent ${EVAL_AGENT_NAME}...`);
+          // Use superego-eval subagent which has no tools
           const result = await client.session.prompt({
             path: { id: evalSessionId },
             body: {
+              agent: EVAL_AGENT_NAME,  // Use subagent with no tools
               model: originalModel ? { providerID: originalModel.providerID, modelID: originalModel.modelID } : undefined,
               parts: [{ type: "text", text: evalPrompt }],
             },
