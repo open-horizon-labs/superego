@@ -29,9 +29,19 @@ The command outputs JSON to stdout:
 
 Feedback text is printed to stderr.
 
-**If concerns are found**: Report the feedback to the user and ask whether to proceed with the current approach.
+## What To Do With Feedback
 
-**If no concerns**: Report "Superego: No concerns" and continue with the task.
+**If `has_concerns` is true:**
+1. **STOP** what you were doing
+2. **SHOW** the feedback to the user verbatim (quote it)
+3. **ASK** the user: "Superego raised concerns. Should I address these before continuing, or proceed anyway?"
+4. **WAIT** for user response before taking further action
+
+**If `has_concerns` is false:**
+- Tell the user "Superego: No concerns with current approach"
+- Continue with the task
+
+**Important:** Do NOT silently incorporate feedback. The user must see it and decide.
 
 ## Requirements
 

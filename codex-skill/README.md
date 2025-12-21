@@ -49,6 +49,25 @@ cd /path/to/your/project
 sg init
 ```
 
+### 5. (Recommended) Add AGENTS.md guidance
+
+Add to your project's `AGENTS.md` or `~/.codex/AGENTS.md`:
+
+```markdown
+## Superego Metacognitive Oversight
+
+This project uses superego. You have the `$superego` skill available.
+
+**Use $superego before:**
+- Large changes (10+ lines across multiple files)
+- Refactoring or architectural decisions
+- Claiming work is "done"
+
+When superego reports concerns, STOP and show them to the user before proceeding.
+```
+
+This tells Codex to use superego proactively, making it semi-automatic.
+
 ## Usage
 
 In Codex, invoke the skill by typing `$superego` in your message:
