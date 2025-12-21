@@ -9,6 +9,7 @@ use crate::bd;
 use crate::claude::{self, ClaudeOptions};
 use crate::decision::{Decision, Journal};
 use crate::feedback::{Feedback, FeedbackQueue};
+use crate::oh::OhIntegration;
 use crate::state::StateManager;
 use crate::transcript;
 
@@ -242,6 +243,11 @@ pub fn evaluate_llm(
         Err(_) => String::new(),
     };
 
+    // Get OH endeavor context (optional - graceful degradation if unavailable)
+    let oh_context = OhIntegration::new(superego_dir)
+        .map(|oh| oh.get_endeavor_context())
+        .unwrap_or_default();
+
     // Check for pending change context (from PreToolUse hook) - session-namespaced
     let pending_change_path = session_dir.join("pending_change.txt");
     let pending_change = if pending_change_path.exists() {
@@ -259,13 +265,13 @@ pub fn evaluate_llm(
         String::new()
     };
 
-    // Build message for superego - include bd context and pending change
+    // Build message for superego - include bd context, OH context, and pending change
     let message = format!(
         "Review the following Claude Code conversation and provide feedback.\n\n\
-        {}--- CONVERSATION ---\n\
+        {}{}--- CONVERSATION ---\n\
         {}\n\
         --- END CONVERSATION ---{}",
-        bd_context, context, pending_context
+        bd_context, oh_context, context, pending_context
     );
 
     // Load superego session ID if available (session-namespaced)
@@ -316,6 +322,13 @@ pub fn evaluate_llm(
             Decision::feedback_delivered(Some(response.session_id.clone()), feedback.clone());
         if let Err(e) = journal.write(&decision) {
             eprintln!("Warning: failed to write decision journal: {}", e);
+        }
+
+        // Log to Open Horizons if configured (optional integration)
+        if let Some(oh) = OhIntegration::new(superego_dir) {
+            if let Err(e) = oh.log_feedback(&feedback) {
+                eprintln!("Warning: failed to log to Open Horizons: {}", e);
+            }
         }
     }
 

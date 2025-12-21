@@ -10,6 +10,7 @@ mod feedback;
 mod hooks;
 mod init;
 mod migrate;
+mod oh;
 mod state;
 mod transcript;
 
