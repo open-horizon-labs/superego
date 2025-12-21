@@ -65,9 +65,7 @@ pub struct LlmEvaluationResult {
 /// Strip common markdown formatting from a line
 /// Handles: # headings, > blockquotes, * bold/italic
 fn strip_markdown_prefix(line: &str) -> &str {
-    line.trim()
-        .trim_start_matches(['#', '>', '*'])
-        .trim()
+    line.trim().trim_start_matches(['#', '>', '*']).trim()
 }
 
 /// Parse the structured decision response from the LLM
