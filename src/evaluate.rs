@@ -130,7 +130,11 @@ fn parse_decision_response(response: &str) -> (bool, String, Option<Confidence>)
             });
 
             // Extract feedback (skip CONFIDENCE line if present)
-            let start = if confidence.is_some() { idx + 2 } else { idx + 1 };
+            let start = if confidence.is_some() {
+                idx + 2
+            } else {
+                idx + 1
+            };
             let feedback: String = lines[start..]
                 .iter()
                 .skip_while(|l| l.trim().is_empty())
