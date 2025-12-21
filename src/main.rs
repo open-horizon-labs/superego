@@ -543,7 +543,12 @@ fn main() {
                 }
             };
 
-            log(&format!("Session: {}", session_path.display()));
+            // Log just the filename, not full path
+            let session_name = session_path
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| session_path.display().to_string());
+            log(&format!("Session: {}", session_name));
             eprintln!("Evaluating: {}", session_path.display());
 
             // Read and format transcript
@@ -564,6 +569,12 @@ fn main() {
             }
 
             let context = transcript::codex::format_codex_context(&entries);
+            let context_kb = context.len() / 1024;
+            log(&format!(
+                "Context: {} entries, {}KB",
+                entries.len(),
+                context_kb
+            ));
 
             // Load system prompt
             let prompt_path = superego_dir.join("prompt.md");
@@ -581,13 +592,15 @@ fn main() {
             );
 
             log("Calling Codex LLM...");
+            let start_time = std::time::Instant::now();
 
             // Use Codex LLM (not Claude) for evaluation
             match codex_llm::invoke(&system_prompt, &message, None) {
                 Ok(response) => {
+                    let elapsed = start_time.elapsed().as_secs_f32();
                     log(&format!(
-                        "Response received, cost=${:.4}",
-                        response.total_cost_usd
+                        "Response in {:.1}s, cost=${:.4}",
+                        elapsed, response.total_cost_usd
                     ));
 
                     // Parse decision from response
