@@ -151,16 +151,16 @@ pub fn invoke(
                     // Check for rate limiting (429)
                     if stderr.contains("429") || stderr.contains("usage_limit_reached") {
                         // Try to extract resets_in_seconds from the error
-                        let resets_in = stderr
-                            .find("resets_in_seconds\":")
-                            .and_then(|i| {
-                                let start = i + 19; // length of "resets_in_seconds\":"
-                                let rest = &stderr[start..];
-                                rest.split(|c: char| !c.is_ascii_digit())
-                                    .next()
-                                    .and_then(|s| s.parse::<u64>().ok())
-                            });
-                        return Err(CodexLlmError::RateLimited { resets_in_seconds: resets_in });
+                        let resets_in = stderr.find("resets_in_seconds\":").and_then(|i| {
+                            let start = i + 19; // length of "resets_in_seconds\":"
+                            let rest = &stderr[start..];
+                            rest.split(|c: char| !c.is_ascii_digit())
+                                .next()
+                                .and_then(|s| s.parse::<u64>().ok())
+                        });
+                        return Err(CodexLlmError::RateLimited {
+                            resets_in_seconds: resets_in,
+                        });
                     }
 
                     return Err(CodexLlmError::CommandFailed(stderr.to_string()));

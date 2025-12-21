@@ -86,7 +86,11 @@ impl CodexEntry {
         if self.entry_type == "response_item" {
             if let Some(ptype) = self.payload.get("type") {
                 return ptype == "message"
-                    && self.payload.get("role").map(|r| r == "assistant").unwrap_or(false);
+                    && self
+                        .payload
+                        .get("role")
+                        .map(|r| r == "assistant")
+                        .unwrap_or(false);
             }
         }
         false
@@ -194,16 +198,14 @@ impl CodexEntry {
         if !self.is_function_output() {
             return None;
         }
-        self.payload
-            .get("output")
-            .and_then(|o| {
-                // Output can be string or JSON
-                if let Some(s) = o.as_str() {
-                    Some(s.to_string())
-                } else {
-                    Some(o.to_string())
-                }
-            })
+        self.payload.get("output").map(|o| {
+            // Output can be string or JSON
+            if let Some(s) = o.as_str() {
+                s.to_string()
+            } else {
+                o.to_string()
+            }
+        })
     }
 }
 
@@ -279,7 +281,7 @@ pub fn format_codex_context(entries: &[CodexEntry]) -> String {
             if name == "shell" {
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&args) {
                     if let Some(cmd) = parsed.get("command") {
-                        output.push_str(" ");
+                        output.push(' ');
                         output.push_str(&cmd.to_string());
                     }
                 }
@@ -357,10 +359,7 @@ pub fn find_latest_codex_session() -> Option<std::path::PathBuf> {
     // Find all .jsonl files and get the most recent
     let mut latest: Option<(std::time::SystemTime, std::path::PathBuf)> = None;
 
-    fn visit_dir(
-        dir: &Path,
-        latest: &mut Option<(std::time::SystemTime, std::path::PathBuf)>,
-    ) {
+    fn visit_dir(dir: &Path, latest: &mut Option<(std::time::SystemTime, std::path::PathBuf)>) {
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -405,7 +404,10 @@ mod tests {
         let json = r#"{"timestamp":"2025-11-04T00:16:00.102Z","type":"event_msg","payload":{"type":"user_message","message":"Hello, help me debug this","images":[]}}"#;
         let entry: CodexEntry = serde_json::from_str(json).unwrap();
         assert!(entry.is_user_message());
-        assert_eq!(entry.user_text(), Some("Hello, help me debug this".to_string()));
+        assert_eq!(
+            entry.user_text(),
+            Some("Hello, help me debug this".to_string())
+        );
     }
 
     #[test]
@@ -413,7 +415,10 @@ mod tests {
         let json = r#"{"timestamp":"2025-11-04T00:16:08.855Z","type":"event_msg","payload":{"type":"agent_reasoning","text":"**Investigating the issue**"}}"#;
         let entry: CodexEntry = serde_json::from_str(json).unwrap();
         assert!(entry.is_reasoning());
-        assert_eq!(entry.reasoning_text(), Some("**Investigating the issue**".to_string()));
+        assert_eq!(
+            entry.reasoning_text(),
+            Some("**Investigating the issue**".to_string())
+        );
     }
 
     #[test]
@@ -430,6 +435,9 @@ mod tests {
         let json = r#"{"timestamp":"2025-11-04T00:16:11.856Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_123","output":"file1.txt\nfile2.txt"}}"#;
         let entry: CodexEntry = serde_json::from_str(json).unwrap();
         assert!(entry.is_function_output());
-        assert_eq!(entry.function_output(), Some("file1.txt\nfile2.txt".to_string()));
+        assert_eq!(
+            entry.function_output(),
+            Some("file1.txt\nfile2.txt".to_string())
+        );
     }
 }

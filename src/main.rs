@@ -568,9 +568,8 @@ fn main() {
             // Load system prompt
             let prompt_path = superego_dir.join("prompt.md");
             let system_prompt = if prompt_path.exists() {
-                std::fs::read_to_string(&prompt_path).unwrap_or_else(|_| {
-                    include_str!("../default_prompt.md").to_string()
-                })
+                std::fs::read_to_string(&prompt_path)
+                    .unwrap_or_else(|_| include_str!("../default_prompt.md").to_string())
             } else {
                 include_str!("../default_prompt.md").to_string()
             };
@@ -586,7 +585,10 @@ fn main() {
             // Use Codex LLM (not Claude) for evaluation
             match codex_llm::invoke(&system_prompt, &message, None) {
                 Ok(response) => {
-                    log(&format!("Response received, cost=${:.4}", response.total_cost_usd));
+                    log(&format!(
+                        "Response received, cost=${:.4}",
+                        response.total_cost_usd
+                    ));
 
                     // Parse decision from response
                     let has_concerns = !response.result.contains("DECISION: ALLOW");
@@ -612,7 +614,9 @@ fn main() {
                     };
                     log(&msg);
                     eprintln!("{}", msg);
-                    println!(r#"{{"has_concerns": false, "skipped": true, "reason": "rate_limited"}}"#);
+                    println!(
+                        r#"{{"has_concerns": false, "skipped": true, "reason": "rate_limited"}}"#
+                    );
                     // Don't exit with error - this is expected behavior
                 }
                 Err(e) => {
