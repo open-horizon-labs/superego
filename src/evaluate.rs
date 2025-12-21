@@ -76,7 +76,7 @@ pub struct LlmEvaluationResult {
     pub feedback: String,
     /// Whether there were concerns
     pub has_concerns: bool,
-    /// Confidence level of the evaluation (parsed for future use in audit/analysis)
+    /// Confidence level of the evaluation (included in feedback, exposed for callers)
     #[allow(dead_code)]
     pub confidence: Option<Confidence>,
     /// Cost of the LLM call
@@ -290,10 +290,16 @@ pub fn evaluate_llm(
     // Write to feedback queue (session-namespaced) and decision journal if there are concerns
     if has_concerns {
         let queue = FeedbackQueue::new(&session_dir);
-        let fb = Feedback::warning(&feedback);
+        // Include confidence in feedback so agent sees it
+        let feedback_with_confidence = if let Some(conf) = confidence {
+            format!("CONFIDENCE: {}\n\n{}", conf, feedback)
+        } else {
+            feedback.clone()
+        };
+        let fb = Feedback::warning(&feedback_with_confidence);
         if let Err(e) = queue.write(&fb) {
             eprintln!("ERROR: failed to write feedback file: {}", e);
-            eprintln!("FEEDBACK CONTENT (fallback):\n{}", feedback);
+            eprintln!("FEEDBACK CONTENT (fallback):\n{}", feedback_with_confidence);
         }
         // Record to decision journal for audit trail (session-namespaced per user requirement)
         let journal = Journal::new(&session_dir);
