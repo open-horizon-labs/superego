@@ -2,9 +2,7 @@
 
 A Codex skill that provides metacognitive oversight via superego.
 
-## Status: In Development
-
-See [DECISION.md](./DECISION.md) for architectural context and constraints.
+See [DECISION.md](./DECISION.md) for architectural context and why this is advisory-only.
 
 ## Limitations
 
@@ -18,27 +16,81 @@ This is due to Codex not having a plugin/hook system. See [GitHub Issue #2109](h
 
 ## Installation
 
+### 1. Install the `sg` binary
+
 ```bash
-# Enable skills in Codex config
-echo '[features]
-skills = true' >> ~/.codex/config.toml
+# Via Homebrew (recommended)
+brew install cloud-atlas-ai/tap/superego
 
-# Install the skill
+# Or via Cargo
+cargo install superego
+```
+
+### 2. Enable skills in Codex
+
+Add to `~/.codex/config.toml`:
+```toml
+[features]
+skills = true
+```
+
+### 3. Install the skill
+
+```bash
 mkdir -p ~/.codex/skills/superego
-cp SKILL.md ~/.codex/skills/superego/
+curl -o ~/.codex/skills/superego/SKILL.md \
+  https://raw.githubusercontent.com/cloud-atlas-ai/superego/main/codex-skill/SKILL.md
+```
 
-# Initialize superego in your project
+### 4. Initialize superego in your project
+
+```bash
+cd /path/to/your/project
 sg init
 ```
 
 ## Usage
 
-In Codex, invoke the skill:
-- Explicitly: Type `$superego` in your message
-- Via `/skills` command to browse and select
+In Codex, invoke the skill by typing `$superego` in your message:
+
+```
+$superego
+
+Please evaluate my current approach before I proceed with the refactoring.
+```
+
+Or use the `/skills` command to browse and select.
+
+## What It Does
+
+When invoked, the skill:
+
+1. Finds your most recent Codex session automatically
+2. Sends the conversation to superego for evaluation
+3. Reports any concerns about:
+   - Intent clarity (is the goal clear?)
+   - X-Y problems (solving the right problem?)
+   - Necessity (needed now vs hypothetical?)
+   - Local maxima (alternatives explored?)
+   - Simplicity (could be simpler?)
+   - Alignment (fits the stated goal?)
+
+## Commands
+
+The skill uses the `sg evaluate-codex` command under the hood:
+
+```bash
+# Run evaluation manually
+sg evaluate-codex
+
+# Output:
+# {"has_concerns": true, "cost_usd": 0.05}
+# Feedback:
+# <feedback text>
+```
 
 ## Requirements
 
-- OpenAI Codex CLI with skills feature enabled
-- `sg` binary installed (`cargo install superego` or via Homebrew)
+- OpenAI Codex CLI v0.70+ with skills feature enabled
+- `sg` binary installed (superego v0.4.5+)
 - `.superego/` initialized in your project
