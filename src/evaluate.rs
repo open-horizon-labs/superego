@@ -62,6 +62,12 @@ pub struct LlmEvaluationResult {
     pub cost_usd: f64,
 }
 
+/// Strip common markdown formatting from a line
+/// Handles: # headings, > blockquotes, * bold/italic
+fn strip_markdown_prefix(line: &str) -> &str {
+    line.trim().trim_start_matches(['#', '>', '*']).trim()
+}
+
 /// Parse the structured decision response from the LLM
 ///
 /// Expected format:
@@ -73,6 +79,7 @@ pub struct LlmEvaluationResult {
 ///
 /// Returns (has_concerns, feedback_text)
 /// AIDEV-NOTE: If parsing fails, defaults to BLOCK to be safe.
+/// AIDEV-NOTE: Handles markdown variations like "## DECISION:" or "**DECISION:**"
 fn parse_decision_response(response: &str) -> (bool, String) {
     let lines: Vec<&str> = response.lines().collect();
 
@@ -82,9 +89,11 @@ fn parse_decision_response(response: &str) -> (bool, String) {
 
     // Search for DECISION: line anywhere in response (handles code fences, extra whitespace, etc.)
     for (idx, line) in lines.iter().enumerate() {
-        let trimmed = line.trim();
-        if let Some(decision_part) = trimmed.strip_prefix("DECISION:") {
-            let decision = decision_part.trim().to_uppercase();
+        // Strip markdown formatting (## headings, ** bold, > blockquotes)
+        let stripped = strip_markdown_prefix(line);
+        if let Some(decision_part) = stripped.strip_prefix("DECISION:") {
+            // Also strip trailing markdown (e.g., "DECISION:** ALLOW" → "ALLOW")
+            let decision = decision_part.trim_start_matches('*').trim().to_uppercase();
 
             // Extract feedback (everything after the DECISION line, skipping blank lines)
             let feedback: String = lines[idx + 1..]
@@ -331,5 +340,47 @@ mod tests {
         let response = "DECISION: MAYBE\n\nNot sure about this.";
         let (has_concerns, _) = parse_decision_response(response);
         assert!(has_concerns); // Unknown decision defaults to block
+    }
+
+    #[test]
+    fn test_parse_decision_markdown_heading() {
+        // LLMs often output "## DECISION: ALLOW" as a markdown heading
+        let response = "## DECISION: ALLOW\n\nExcellent work on this implementation.";
+        let (has_concerns, feedback) = parse_decision_response(response);
+        assert!(!has_concerns, "Should parse ALLOW despite ## prefix");
+        assert_eq!(feedback, "Excellent work on this implementation.");
+
+        let response = "## DECISION: BLOCK\n\nThis needs review.";
+        let (has_concerns, feedback) = parse_decision_response(response);
+        assert!(has_concerns, "Should parse BLOCK despite ## prefix");
+        assert_eq!(feedback, "This needs review.");
+    }
+
+    #[test]
+    fn test_parse_decision_markdown_bold() {
+        // Handle **DECISION:** format
+        let response = "**DECISION:** ALLOW\n\nLooks good.";
+        let (has_concerns, feedback) = parse_decision_response(response);
+        assert!(!has_concerns, "Should parse ALLOW despite ** prefix");
+        assert_eq!(feedback, "Looks good.");
+    }
+
+    #[test]
+    fn test_parse_decision_markdown_blockquote() {
+        // Handle > DECISION: format
+        let response = "> DECISION: ALLOW\n\nApproved.";
+        let (has_concerns, feedback) = parse_decision_response(response);
+        assert!(!has_concerns, "Should parse ALLOW despite > prefix");
+        assert_eq!(feedback, "Approved.");
+    }
+
+    #[test]
+    fn test_strip_markdown_prefix() {
+        assert_eq!(strip_markdown_prefix("## DECISION:"), "DECISION:");
+        assert_eq!(strip_markdown_prefix("### DECISION:"), "DECISION:");
+        assert_eq!(strip_markdown_prefix("**DECISION:**"), "DECISION:**");
+        assert_eq!(strip_markdown_prefix("> DECISION:"), "DECISION:");
+        assert_eq!(strip_markdown_prefix("  ## DECISION:"), "DECISION:");
+        assert_eq!(strip_markdown_prefix("DECISION:"), "DECISION:");
     }
 }
