@@ -66,7 +66,7 @@ pub struct LlmEvaluationResult {
 /// Handles: # headings, > blockquotes, * bold/italic
 fn strip_markdown_prefix(line: &str) -> &str {
     line.trim()
-        .trim_start_matches(|c: char| c == '#' || c == '>' || c == '*')
+        .trim_start_matches(['#', '>', '*'])
         .trim()
 }
 
