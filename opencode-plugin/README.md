@@ -56,7 +56,7 @@ opencode-plugin/              # OpenCode adapter (TypeScript)
 cd /path/to/your/project
 
 # 1. Download pre-built plugin
-curl -L -o superego.js https://github.com/cloud-atlas-ai/superego/releases/download/v0.4.2-alpha/index.js
+curl -L -o superego.js https://github.com/cloud-atlas-ai/superego/releases/latest/download/index.js
 
 # 2. Install plugin
 mkdir -p .opencode/plugin
@@ -65,7 +65,8 @@ mv superego.js .opencode/plugin/
 # 3. Start OpenCode
 opencode
 
-# 4. Initialize superego (ask OpenCode to use the superego tool with "init")
+# 4. Initialize superego by asking OpenCode to use the 'superego' tool with the 'init' command.
+# For example: "use the superego tool to initialize the project"
 ```
 
 ### Option B: Build from source
@@ -82,7 +83,7 @@ cd /path/to/your/project
 mkdir -p .opencode/plugin
 cp /tmp/superego/opencode-plugin/dist/index.js .opencode/plugin/superego.js
 
-# 3. Start OpenCode and ask it to use superego init
+# 3. Start OpenCode and ask it to initialize superego. For example: \"use the superego tool to initialize the project\"
 opencode
 ```
 
@@ -90,13 +91,13 @@ opencode
 
 ```bash
 # 1. Download plugin
-curl -L -o superego.js https://github.com/cloud-atlas-ai/superego/releases/download/v0.4.2-alpha/index.js
+curl -L -o superego.js https://github.com/cloud-atlas-ai/superego/releases/latest/download/index.js
 
 # 2. Install globally
 mkdir -p ~/.config/opencode/plugin
 mv superego.js ~/.config/opencode/plugin/
 
-# 3. In each project, ask OpenCode to use superego init
+# 3. In each project, ask OpenCode to initialize superego. For example: "use the superego tool to initialize the project"
 ```
 
 ## Tool Commands
@@ -111,7 +112,9 @@ The plugin provides a single `superego` tool with these commands:
 | `enable` | Re-enable superego after disable |
 | `remove` | Remove superego from project (deletes `.superego/`) |
 
-Usage: Ask OpenCode "use the superego tool with init" or "check superego status".
+Usage: To initialize superego, ask OpenCode: \"use the superego tool with init\".
+
+You can also ask it to \"check superego status\".
 
 ## Test Plan
 
