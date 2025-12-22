@@ -74,6 +74,8 @@ enum Commands {
     },
 
     /// Check if periodic evaluation is due (for hooks)
+    ///
+    /// Exit codes: 0 = eval needed ("yes"), 1 = not needed ("no")
     ShouldEval {
         /// Claude session ID (for per-session state isolation)
         #[arg(long)]

@@ -121,6 +121,7 @@ The plugin's hooks use `${CLAUDE_PROJECT_DIR}` to find the project's `.superego/
 - `sg history --limit N` - Show recent decisions
 - `sg check` - Verify hooks are up to date
 - `sg reset` - Remove superego configuration
+- `sg should-eval` - Check if periodic eval is due (exit 0 = yes, exit 1 = no)
 
 ## Decision Journal
 
