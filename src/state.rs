@@ -157,4 +157,32 @@ mod tests {
         let loaded = manager.load().unwrap();
         assert!(loaded.disabled);
     }
+
+    #[test]
+    fn test_mark_evaluated_at_stores_exact_timestamp() {
+        // AIDEV-NOTE: This tests the race condition fix.
+        // We must store the transcript READ time, not completion time.
+        // If we stored Utc::now() at completion, messages written during
+        // the 30+ second LLM eval would be skipped.
+        use chrono::TimeZone;
+
+        let dir = tempdir().unwrap();
+        let manager = StateManager::new(dir.path());
+
+        // Simulate: captured read time is 5 minutes in the past
+        // (LLM eval took 5 minutes, but we want the READ time stored)
+        let read_time = Utc.with_ymd_and_hms(2025, 1, 15, 10, 0, 0).unwrap();
+
+        manager
+            .update(|s| {
+                s.mark_evaluated_at(read_time);
+            })
+            .unwrap();
+
+        let loaded = manager.load().unwrap();
+
+        // Critical: the stored timestamp must be the exact read_time,
+        // NOT some later time like Utc::now()
+        assert_eq!(loaded.last_evaluated, Some(read_time));
+    }
 }

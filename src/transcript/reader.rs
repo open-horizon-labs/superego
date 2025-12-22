@@ -329,4 +329,61 @@ mod tests {
             "AB<system-reminder>3</system-reminder>"
         );
     }
+
+    #[test]
+    fn test_get_messages_since_race_condition_scenario() {
+        // AIDEV-NOTE: This tests the race condition fix scenario.
+        //
+        // Timeline:
+        //   T1 (10:00:00) - Message A written
+        //   T2 (10:00:05) - transcript_read_at captured (evaluation starts)
+        //   T3 (10:00:10) - Message B written (during LLM eval)
+        //   T4 (10:00:35) - LLM eval finishes
+        //
+        // OLD BUG: last_evaluated = T4 → Message B skipped forever!
+        // FIX: last_evaluated = T2 → Message B included in next eval
+        use chrono::TimeZone;
+
+        let msg_a = r#"{"type":"user","uuid":"a","sessionId":"s1","timestamp":"2025-01-15T10:00:00Z","message":{"role":"user","content":"Message A"}}"#;
+        let msg_b = r#"{"type":"user","uuid":"b","sessionId":"s1","timestamp":"2025-01-15T10:00:10Z","message":{"role":"user","content":"Message B (during eval)"}}"#;
+
+        let entries: Vec<TranscriptEntry> = vec![
+            serde_json::from_str(msg_a).unwrap(),
+            serde_json::from_str(msg_b).unwrap(),
+        ];
+
+        // Simulate: transcript_read_at was captured at 10:00:05
+        let transcript_read_at = chrono::Utc
+            .with_ymd_and_hms(2025, 1, 15, 10, 0, 5)
+            .unwrap();
+
+        // First eval: cutoff is None (first run), should get both messages
+        let first_eval = get_messages_since(&entries, None, Some("s1"));
+        assert_eq!(first_eval.len(), 2, "First eval should get all messages");
+
+        // Second eval: cutoff is transcript_read_at (10:00:05)
+        // Should include Message B (10:00:10 > 10:00:05) but not A
+        let second_eval = get_messages_since(&entries, Some(transcript_read_at), Some("s1"));
+        assert_eq!(
+            second_eval.len(),
+            1,
+            "Second eval should only get Message B (written after cutoff)"
+        );
+        assert_eq!(
+            second_eval[0].user_text(),
+            Some("Message B (during eval)".to_string())
+        );
+
+        // Simulate the OLD bug: cutoff is completion time (10:00:35)
+        // This would SKIP Message B - demonstrating the bug
+        let buggy_cutoff = chrono::Utc
+            .with_ymd_and_hms(2025, 1, 15, 10, 0, 35)
+            .unwrap();
+        let buggy_eval = get_messages_since(&entries, Some(buggy_cutoff), Some("s1"));
+        assert_eq!(
+            buggy_eval.len(),
+            0,
+            "Bug scenario: using completion time would skip Message B"
+        );
+    }
 }
