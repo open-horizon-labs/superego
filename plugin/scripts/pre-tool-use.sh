@@ -178,19 +178,12 @@ fi
 # ===========================================================================
 # TRIGGER 2: INTERVAL CHECK (any tool, periodic drift detection)
 # ===========================================================================
-# sg should-eval returns exit 0 if eval needed, exit 1 if not
+# sg should-eval exits 0 if eval needed, 1 if not
+INTERVAL_TRIGGERED=false
 if [ -n "$SESSION_ID" ]; then
-    if sg should-eval --session-id "$SESSION_ID" 2>/dev/null | grep -q "yes"; then
-        INTERVAL_TRIGGERED=true
-    else
-        INTERVAL_TRIGGERED=false
-    fi
+    sg should-eval --session-id "$SESSION_ID" >/dev/null 2>&1 && INTERVAL_TRIGGERED=true
 else
-    if sg should-eval 2>/dev/null | grep -q "yes"; then
-        INTERVAL_TRIGGERED=true
-    else
-        INTERVAL_TRIGGERED=false
-    fi
+    sg should-eval >/dev/null 2>&1 && INTERVAL_TRIGGERED=true
 fi
 
 if [ "$INTERVAL_TRIGGERED" = true ]; then
