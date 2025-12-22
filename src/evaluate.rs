@@ -204,6 +204,12 @@ pub fn evaluate_llm(
     let state_mgr = StateManager::new(&session_dir);
     let state = state_mgr.load().unwrap_or_default();
 
+    // AIDEV-NOTE: Capture read timestamp NOW, before reading transcript.
+    // This creates a barrier: "we've evaluated everything as of this moment".
+    // Messages written during LLM eval will be caught by next evaluation.
+    // Using Utc::now() at read time (not finish time) prevents race conditions.
+    let transcript_read_at = chrono::Utc::now();
+
     // Auto-detect transcript format and load appropriately
     let context = if transcript::codex::is_codex_format(transcript_path) {
         // Codex format
@@ -307,8 +313,9 @@ pub fn evaluate_llm(
         fs::write(&superego_session_path, &response.session_id)?;
     }
 
-    // Update last_evaluated timestamp (reuse state_mgr from top)
-    if let Err(e) = state_mgr.update(|s| s.mark_evaluated()) {
+    // Update last_evaluated to transcript read time (not completion time!)
+    // This ensures messages written during LLM eval are caught next time.
+    if let Err(e) = state_mgr.update(|s| s.mark_evaluated_at(transcript_read_at)) {
         eprintln!("Warning: failed to update state: {}", e);
     }
 

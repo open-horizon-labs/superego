@@ -19,9 +19,11 @@ pub struct State {
 }
 
 impl State {
-    /// Mark as evaluated
-    pub fn mark_evaluated(&mut self) {
-        self.last_evaluated = Some(Utc::now());
+    /// Mark as evaluated up to a specific timestamp
+    /// AIDEV-NOTE: Use the transcript read timestamp, NOT Utc::now() at
+    /// completion time. This prevents skipping messages written during LLM eval.
+    pub fn mark_evaluated_at(&mut self, timestamp: DateTime<Utc>) {
+        self.last_evaluated = Some(timestamp);
     }
 }
 
