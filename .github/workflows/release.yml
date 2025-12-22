@@ -63,13 +63,18 @@ jobs:
              See [opencode-plugin/README.md](https://github.com/cloud-atlas-ai/superego/blob/main/opencode-plugin/README.md) for details.
 
              ### Codex
-             1. **Install the skill:**
+             1. **Enable skills in `~/.codex/config.toml`:**
+                ```toml
+                [features]
+                skills = true
+                ```
+             2. **Install the skill:**
                 ```bash
                 mkdir -p ~/.codex/skills/superego
                 curl -o ~/.codex/skills/superego/SKILL.md \
                   https://raw.githubusercontent.com/cloud-atlas-ai/superego/main/codex-skill/SKILL.md
                 ```
-             2. **Initialize in your project by asking the agent:**
+             3. **Initialize in your project by asking the agent:**
                 > `$superego init`
                 
                 This will create the `.superego/` directory and also add guidance to `AGENTS.md` to help the agent use the skill proactively.
