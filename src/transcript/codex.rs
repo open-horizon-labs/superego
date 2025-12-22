@@ -347,7 +347,35 @@ pub fn is_codex_format(path: &Path) -> bool {
     false
 }
 
-/// Find the most recent Codex session file
+/// Check if a session file is user-initiated (not a sub-agent codex_exec session)
+fn is_user_initiated_session(path: &Path) -> bool {
+    let file = match File::open(path) {
+        Ok(f) => f,
+        Err(_) => return false,
+    };
+    let reader = BufReader::new(file);
+
+    // Check first few lines for session_meta with originator
+    for line in reader.lines().take(5).flatten() {
+        if let Ok(entry) = serde_json::from_str::<CodexEntry>(&line) {
+            if entry.entry_type == "session_meta" {
+                // Check originator field - "codex_exec" means sub-agent, skip it
+                if let Some(originator) = entry.payload.get("originator") {
+                    if originator == "codex_exec" {
+                        return false;
+                    }
+                }
+                // Found session_meta without codex_exec originator, it's user-initiated
+                return true;
+            }
+        }
+    }
+    // No session_meta found, assume it's ok
+    true
+}
+
+/// Find the most recent user-initiated Codex session file
+/// Filters out sub-agent sessions (originator: "codex_exec")
 pub fn find_latest_codex_session() -> Option<std::path::PathBuf> {
     let home = std::env::var("HOME").ok()?;
     let sessions_dir = Path::new(&home).join(".codex/sessions");
@@ -356,7 +384,7 @@ pub fn find_latest_codex_session() -> Option<std::path::PathBuf> {
         return None;
     }
 
-    // Find all .jsonl files and get the most recent
+    // Find all .jsonl files and get the most recent USER-INITIATED session
     let mut latest: Option<(std::time::SystemTime, std::path::PathBuf)> = None;
 
     fn visit_dir(dir: &Path, latest: &mut Option<(std::time::SystemTime, std::path::PathBuf)>) {
@@ -366,6 +394,10 @@ pub fn find_latest_codex_session() -> Option<std::path::PathBuf> {
                 if path.is_dir() {
                     visit_dir(&path, latest);
                 } else if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
+                    // Skip sub-agent sessions (codex_exec)
+                    if !is_user_initiated_session(&path) {
+                        continue;
+                    }
                     if let Ok(meta) = path.metadata() {
                         if let Ok(modified) = meta.modified() {
                             match latest {

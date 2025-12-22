@@ -9,15 +9,18 @@ Add this to your project's AGENTS.md (or ~/.codex/AGENTS.md for global):
 This project uses superego for metacognitive oversight. You have the `$superego` skill available.
 
 **When to use $superego:**
-- Before making large changes (10+ lines across multiple files)
-- Before refactoring or architectural decisions
-- When uncertain about the approach
-- Before claiming work is "done"
+- **Before committing to a plan or approach** - when you've decided HOW to solve something
+- **When choosing between alternatives** - before picking option A vs B vs C
+- **Before non-trivial implementations** - anything that touches multiple files or introduces new patterns
+- **When the task feels complex or uncertain** - trust your instincts
+- **Before claiming work is "done"** - final sanity check
+
+The key insight: superego catches strategic mistakes (wrong approach, over-engineering, scope creep), not syntax errors. Use it at **decision points**, not just before large edits.
 
 **How to use:**
 1. Invoke `$superego` to run evaluation
-2. Review the feedback
-3. If concerns are found, discuss with the user before proceeding
-4. If no concerns, continue with confidence
+2. If `has_concerns: true` - STOP and show feedback to user, ask before proceeding
+3. If `has_concerns: false` - continue with confidence
+4. If `skipped: true` - proceed normally (this is fine, not an error)
 
-**Do not skip superego evaluation** for non-trivial changes. The user expects metacognitive oversight on this project.
+**Do not skip superego evaluation** for planning or non-trivial work. The user expects metacognitive oversight on this project.

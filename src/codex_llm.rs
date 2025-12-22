@@ -14,7 +14,7 @@ pub struct CodexLlmResponse {
     pub result: String,
     #[allow(dead_code)]
     pub session_id: String,
-    pub total_cost_usd: f64,
+    pub total_tokens: u64,
 }
 
 /// Error type for Codex invocation
@@ -128,6 +128,10 @@ pub fn invoke(
     cmd.stderr(Stdio::piped());
     cmd.stdin(Stdio::piped());
 
+    // Recursion prevention - superego's Codex calls must not trigger
+    // hooks/skills that call superego again.
+    cmd.env("SUPEREGO_DISABLED", "1");
+
     let timeout = Duration::from_millis(timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS));
     let mut child = cmd.spawn()?;
 
@@ -219,11 +223,9 @@ fn parse_codex_output(output: &str) -> Result<CodexLlmResponse, CodexLlmError> {
         ));
     }
 
-    let cost_usd = (total_tokens as f64) * 0.00003;
-
     Ok(CodexLlmResponse {
         result: result_text,
         session_id: thread_id,
-        total_cost_usd: cost_usd,
+        total_tokens,
     })
 }

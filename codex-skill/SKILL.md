@@ -24,12 +24,12 @@ This will:
 
 The command outputs JSON to stdout:
 ```json
-{"has_concerns": true, "cost_usd": 0.05}
+{"has_concerns": true, "tokens": 5000}
 ```
 
 Feedback text is printed to stderr.
 
-## What To Do With Feedback
+## What To Do With Results
 
 **If `has_concerns` is true:**
 1. **STOP** what you were doing
@@ -40,6 +40,11 @@ Feedback text is printed to stderr.
 **If `has_concerns` is false:**
 - Tell the user "Superego: No concerns with current approach"
 - Continue with the task
+
+**If `skipped` is true (evaluation skipped):**
+- This is normal - means another evaluation is in progress or recursion was prevented
+- **Proceed normally** with the task - this is NOT an error
+- Do NOT wait or retry
 
 **Important:** Do NOT silently incorporate feedback. The user must see it and decide.
 

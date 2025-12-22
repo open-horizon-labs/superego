@@ -490,6 +490,13 @@ fn main() {
                     .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
             };
 
+            // Recursion prevention - skip if this is superego's own Codex call
+            if std::env::var("SUPEREGO_DISABLED").as_deref() == Ok("1") {
+                log("SKIP: SUPEREGO_DISABLED=1");
+                println!(r#"{{"has_concerns": false, "skipped": true, "reason": "recursion_prevention"}}"#);
+                return;
+            }
+
             log("evaluate-codex started");
 
             // Check if superego is initialized
@@ -501,7 +508,8 @@ fn main() {
 
             // Check for lock file to prevent concurrent evals
             let lock_path = superego_dir.join("codex.lock");
-            let lock_timeout = std::time::Duration::from_secs(300); // 5 minutes
+            // Match codex exec timeout (3 min) - locks older than this are from crashed processes
+            let lock_timeout = std::time::Duration::from_secs(180);
 
             if lock_path.exists() {
                 if let Ok(meta) = lock_path.metadata() {
@@ -514,7 +522,8 @@ fn main() {
                         }
                     }
                 }
-                // Stale lock, remove it
+                // Lock is >3min old - probably a crash, safe to remove
+                log("Removing stale lock (>3min old)");
                 let _ = std::fs::remove_file(&lock_path);
             }
 
@@ -563,7 +572,7 @@ fn main() {
 
             if entries.is_empty() {
                 log("No entries in transcript");
-                println!(r#"{{"has_concerns": false, "cost_usd": 0}}"#);
+                println!(r#"{{"has_concerns": false, "tokens": 0}}"#);
                 eprintln!("No concerns.");
                 return;
             }
@@ -599,16 +608,16 @@ fn main() {
                 Ok(response) => {
                     let elapsed = start_time.elapsed().as_secs_f32();
                     log(&format!(
-                        "Response in {:.1}s, cost=${:.4}",
-                        elapsed, response.total_cost_usd
+                        "Response in {:.1}s, tokens={}",
+                        elapsed, response.total_tokens
                     ));
 
                     // Parse decision from response
                     let has_concerns = !response.result.contains("DECISION: ALLOW");
 
                     println!(
-                        r#"{{"has_concerns": {}, "cost_usd": {:.6}}}"#,
-                        has_concerns, response.total_cost_usd
+                        r#"{{"has_concerns": {}, "tokens": {}}}"#,
+                        has_concerns, response.total_tokens
                     );
 
                     if has_concerns {
