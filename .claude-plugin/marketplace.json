@@ -13,7 +13,7 @@
       "name": "superego",
       "source": "./plugin",
       "description": "Metacognitive advisor that monitors Claude Code and provides feedback",
-      "version": "0.6.1",
+      "version": "0.6.2",
       "author": {
         "name": "Cloud Atlas AI"
       }
