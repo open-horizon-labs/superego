@@ -131,11 +131,25 @@ pub fn invoke(
             Some(status) => {
                 // Process exited - collect output
                 let output = child.wait_with_output()?;
-                if !status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    return Err(ClaudeError::CommandFailed(stderr.to_string()));
-                }
                 let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                
+                if !status.success() {
+                    // Claude CLI returns errors in JSON stdout with is_error: true
+                    // Try to parse stdout to get a more helpful error message
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
+                        if let Some(result) = json.get("result").and_then(|r| r.as_str()) {
+                            return Err(ClaudeError::CommandFailed(result.to_string()));
+                        }
+                    }
+                    // Fall back to stderr if we can't parse stdout
+                    let error_msg = if stderr.is_empty() { 
+                        stdout.to_string() 
+                    } else { 
+                        stderr.to_string() 
+                    };
+                    return Err(ClaudeError::CommandFailed(error_msg));
+                }
                 let response: ClaudeResponse = serde_json::from_str(&stdout)?;
                 return Ok(response);
             }
