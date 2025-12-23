@@ -214,7 +214,8 @@ pub fn evaluate_llm(
     let transcript_read_at = chrono::Utc::now();
 
     // Auto-detect transcript format and load appropriately
-    let context = if transcript::codex::is_codex_format(transcript_path) {
+    // AIDEV-NOTE: transcript_entries is kept around for carryover context (avoids double read)
+    let (context, transcript_entries) = if transcript::codex::is_codex_format(transcript_path) {
         // Codex format
         let entries = transcript::codex::read_codex_transcript(transcript_path)?;
         if entries.is_empty() {
@@ -225,7 +226,7 @@ pub fn evaluate_llm(
                 cost_usd: 0.0,
             });
         }
-        transcript::codex::format_codex_context(&entries)
+        (transcript::codex::format_codex_context(&entries), Vec::new())
     } else {
         // Claude Code format
         let entries = transcript::read_transcript(transcript_path)?;
@@ -243,7 +244,7 @@ pub fn evaluate_llm(
             });
         }
 
-        transcript::format_context(&messages)
+        (transcript::format_context(&messages), entries)
     };
 
     // Load config for carryover settings
@@ -277,10 +278,9 @@ pub fn evaluate_llm(
         }
 
         // Get messages from N minutes before last_evaluated (if we have a cutoff)
+        // Uses transcript_entries loaded earlier (avoids double read)
         if let Some(cutoff) = state.last_evaluated {
             let window_start = cutoff - Duration::minutes(config.carryover_window_minutes);
-            // Read transcript into a binding so it lives long enough
-            let transcript_entries = transcript::read_transcript(transcript_path).unwrap_or_default();
             let recent_messages = transcript::get_messages_in_window(
                 &transcript_entries,
                 window_start,
