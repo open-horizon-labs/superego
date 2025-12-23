@@ -81,6 +81,15 @@ claude plugin update superego@superego      # Update plugin
 
 **State tracking:** `last_evaluated` timestamp in state.json ensures only new conversation content is evaluated.
 
+## Code Style Rules
+
+**Never truncate content.** Do not use patterns like `&text[..200]` or `if len > N { truncate }`. If content is too long, either:
+1. Include it fully
+2. Omit it entirely with a note
+3. Restructure to avoid the size issue
+
+Truncation loses information and makes debugging harder.
+
 ## Dependencies
 
 Minimal dependency set (no regex, no async runtime):

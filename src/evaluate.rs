@@ -265,14 +265,8 @@ pub fn evaluate_llm(
             if !recent.is_empty() {
                 parts.push("Recent superego decisions:".to_string());
                 for d in recent.iter().rev() {
-                    // Show timestamp and truncated feedback
                     let feedback = d.context.as_deref().unwrap_or("(no context)");
-                    let truncated = if feedback.len() > 200 {
-                        format!("{}...", &feedback[..200])
-                    } else {
-                        feedback.to_string()
-                    };
-                    parts.push(format!("- [{}]: {}", d.timestamp.format("%H:%M:%S"), truncated));
+                    parts.push(format!("- [{}]: {}", d.timestamp.format("%H:%M:%S"), feedback));
                 }
                 parts.push(String::new()); // blank line
             }
@@ -292,13 +286,7 @@ pub fn evaluate_llm(
             
             if !recent_messages.is_empty() {
                 parts.push("Recent activity (before current evaluation window):".to_string());
-                let formatted = transcript::format_context(&recent_messages);
-                // Truncate if too long
-                if formatted.len() > 2000 {
-                    parts.push(format!("{}...(truncated)", &formatted[..2000]));
-                } else {
-                    parts.push(formatted);
-                }
+                parts.push(transcript::format_context(&recent_messages));
             }
         }
 
