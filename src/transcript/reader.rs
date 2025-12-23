@@ -353,9 +353,7 @@ mod tests {
         ];
 
         // Simulate: transcript_read_at was captured at 10:00:05
-        let transcript_read_at = chrono::Utc
-            .with_ymd_and_hms(2025, 1, 15, 10, 0, 5)
-            .unwrap();
+        let transcript_read_at = chrono::Utc.with_ymd_and_hms(2025, 1, 15, 10, 0, 5).unwrap();
 
         // First eval: cutoff is None (first run), should get both messages
         let first_eval = get_messages_since(&entries, None, Some("s1"));
