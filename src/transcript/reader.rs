@@ -415,4 +415,94 @@ mod tests {
             "Bug scenario: using completion time would skip Message B"
         );
     }
+
+    #[test]
+    fn test_get_messages_in_window_basic() {
+        use chrono::TimeZone;
+
+        let msg_a = r#"{"type":"user","uuid":"a","sessionId":"s1","timestamp":"2025-01-15T10:00:00Z","message":{"role":"user","content":"Message A"}}"#;
+        let msg_b = r#"{"type":"user","uuid":"b","sessionId":"s1","timestamp":"2025-01-15T10:05:00Z","message":{"role":"user","content":"Message B"}}"#;
+        let msg_c = r#"{"type":"user","uuid":"c","sessionId":"s1","timestamp":"2025-01-15T10:10:00Z","message":{"role":"user","content":"Message C"}}"#;
+
+        let entries: Vec<TranscriptEntry> = vec![
+            serde_json::from_str(msg_a).unwrap(),
+            serde_json::from_str(msg_b).unwrap(),
+            serde_json::from_str(msg_c).unwrap(),
+        ];
+
+        let start = chrono::Utc.with_ymd_and_hms(2025, 1, 15, 10, 3, 0).unwrap();
+        let end = chrono::Utc.with_ymd_and_hms(2025, 1, 15, 10, 8, 0).unwrap();
+
+        let result = get_messages_in_window(&entries, start, end, Some("s1"));
+        assert_eq!(result.len(), 1, "Should only get Message B (in window)");
+        assert_eq!(result[0].user_text(), Some("Message B".to_string()));
+    }
+
+    #[test]
+    fn test_get_messages_in_window_empty() {
+        use chrono::TimeZone;
+
+        let msg_a = r#"{"type":"user","uuid":"a","sessionId":"s1","timestamp":"2025-01-15T10:00:00Z","message":{"role":"user","content":"Message A"}}"#;
+
+        let entries: Vec<TranscriptEntry> = vec![serde_json::from_str(msg_a).unwrap()];
+
+        // Window that contains no messages
+        let start = chrono::Utc.with_ymd_and_hms(2025, 1, 15, 11, 0, 0).unwrap();
+        let end = chrono::Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap();
+
+        let result = get_messages_in_window(&entries, start, end, Some("s1"));
+        assert_eq!(result.len(), 0, "Window with no messages should be empty");
+    }
+
+    #[test]
+    fn test_get_messages_in_window_session_filter() {
+        use chrono::TimeZone;
+
+        let msg_a = r#"{"type":"user","uuid":"a","sessionId":"s1","timestamp":"2025-01-15T10:05:00Z","message":{"role":"user","content":"Session 1"}}"#;
+        let msg_b = r#"{"type":"user","uuid":"b","sessionId":"s2","timestamp":"2025-01-15T10:05:00Z","message":{"role":"user","content":"Session 2"}}"#;
+
+        let entries: Vec<TranscriptEntry> = vec![
+            serde_json::from_str(msg_a).unwrap(),
+            serde_json::from_str(msg_b).unwrap(),
+        ];
+
+        let start = chrono::Utc.with_ymd_and_hms(2025, 1, 15, 10, 0, 0).unwrap();
+        let end = chrono::Utc.with_ymd_and_hms(2025, 1, 15, 10, 10, 0).unwrap();
+
+        // Filter by session s1
+        let result = get_messages_in_window(&entries, start, end, Some("s1"));
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].user_text(), Some("Session 1".to_string()));
+
+        // Filter by session s2
+        let result = get_messages_in_window(&entries, start, end, Some("s2"));
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].user_text(), Some("Session 2".to_string()));
+
+        // No filter - get both
+        let result = get_messages_in_window(&entries, start, end, None);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_get_messages_in_window_boundary_inclusive_exclusive() {
+        use chrono::TimeZone;
+
+        // Message exactly at start time (should be included - start is inclusive)
+        let msg_at_start = r#"{"type":"user","uuid":"a","sessionId":"s1","timestamp":"2025-01-15T10:00:00Z","message":{"role":"user","content":"At start"}}"#;
+        // Message exactly at end time (should NOT be included - end is exclusive)
+        let msg_at_end = r#"{"type":"user","uuid":"b","sessionId":"s1","timestamp":"2025-01-15T10:10:00Z","message":{"role":"user","content":"At end"}}"#;
+
+        let entries: Vec<TranscriptEntry> = vec![
+            serde_json::from_str(msg_at_start).unwrap(),
+            serde_json::from_str(msg_at_end).unwrap(),
+        ];
+
+        let start = chrono::Utc.with_ymd_and_hms(2025, 1, 15, 10, 0, 0).unwrap();
+        let end = chrono::Utc.with_ymd_and_hms(2025, 1, 15, 10, 10, 0).unwrap();
+
+        let result = get_messages_in_window(&entries, start, end, Some("s1"));
+        assert_eq!(result.len(), 1, "Should include start, exclude end");
+        assert_eq!(result[0].user_text(), Some("At start".to_string()));
+    }
 }
