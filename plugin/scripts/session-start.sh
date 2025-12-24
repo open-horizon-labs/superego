@@ -45,6 +45,11 @@ curl -sS --max-time 5 "$PROMPT_URL" -o "$PROMPT_PATH.tmp" 2>/dev/null && \
 # .superego/ exists - log session start
 echo "[$(date '+%H:%M:%S')] [session] Session started" >> "$PROJECT_DIR/.superego/hook.log" 2>/dev/null
 
+# Clean up stale pending_change.txt files from previous sessions
+# These can persist if a session crashes mid-evaluation, causing "phantom edit" warnings
+rm -f "$PROJECT_DIR/.superego/pending_change.txt" 2>/dev/null
+find "$PROJECT_DIR/.superego/sessions" -name "pending_change.txt" -delete 2>/dev/null
+
 # SCENARIO 2: .superego/ exists but binary missing - offer to install
 if ! command -v sg &> /dev/null; then
     echo "[$(date '+%H:%M:%S')] [session] sg binary not found - requesting install" >> "$PROJECT_DIR/.superego/hook.log" 2>/dev/null
