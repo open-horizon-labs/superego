@@ -4,3 +4,7 @@
 .superego/
 .claude/hooks/superego/
 .claude/settings.json
+
+# Generated files
+*.html
+.DS_Store
