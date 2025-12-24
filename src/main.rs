@@ -117,6 +117,10 @@ enum Commands {
         /// Open in browser after generating
         #[arg(long)]
         open: bool,
+
+        /// Push retrospective data to Open Horizons
+        #[arg(long)]
+        push_oh: bool,
     },
 }
 
@@ -678,6 +682,7 @@ fn main() {
             full,
             output,
             open,
+            push_oh,
         } => {
             let superego_dir = Path::new(".superego");
 
@@ -688,7 +693,7 @@ fn main() {
 
             // Default is curated mode; --full disables curation
             let curated = !full;
-            match retro::run(superego_dir, session.as_deref(), curated, &output, open) {
+            match retro::run(superego_dir, session.as_deref(), curated, &output, open, push_oh) {
                 Ok(()) => {}
                 Err(e) => {
                     eprintln!("Retro failed: {}", e);

@@ -8,13 +8,14 @@
 use crate::claude::{self, ClaudeOptions};
 use crate::decision::{Decision, DecisionType};
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
 
 /// Severity levels for timeline events
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Severity {
     Error,
     Warning,
@@ -34,7 +35,7 @@ impl Severity {
 }
 
 /// A moment in the timeline
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Moment {
     pub timestamp: DateTime<Utc>,
     pub title: String,
@@ -178,7 +179,10 @@ fn infer_tag(context: &str) -> String {
         "Protocol".to_string()
     } else if lower.contains("intent") || lower.contains("x-y problem") || lower.contains("why") {
         "Intent Check".to_string()
-    } else if lower.contains("scope") || lower.contains("over-engineer") || lower.contains("complexity") {
+    } else if lower.contains("scope")
+        || lower.contains("over-engineer")
+        || lower.contains("complexity")
+    {
         "Scope Alert".to_string()
     } else if lower.contains("plan mode") || lower.contains("exitplanmode") {
         "Plan Mode".to_string()
@@ -261,7 +265,7 @@ fn decisions_to_moments(decisions: Vec<Decision>) -> Vec<Moment> {
                 detail: context.clone(),
                 severity: infer_severity(context),
                 tag: infer_tag(context),
-                accepted: None,  // Not available in default mode
+                accepted: None, // Not available in default mode
                 reaction: None,
             })
         })
@@ -304,9 +308,105 @@ struct CuratedMoment {
 }
 
 /// Result of LLM curation including executive summary
-struct CurationResult {
-    executive_summary: String,
-    moments: Vec<Moment>,
+pub struct CurationResult {
+    pub executive_summary: String,
+    pub moments: Vec<Moment>,
+}
+
+// === OH Integration Payload ===
+
+/// Statistics for the retrospective
+#[derive(Debug, Serialize)]
+pub struct RetrospectiveStats {
+    /// Total number of decisions in session
+    pub total_decisions: usize,
+    /// Number of curated moments shown
+    pub curated_count: usize,
+    /// Number of moments where Claude accepted feedback
+    pub accepted_count: usize,
+    /// Number of moments where Claude dismissed feedback
+    pub dismissed_count: usize,
+}
+
+/// Metadata payload for OH log entry
+#[derive(Debug, Serialize)]
+pub struct RetrospectiveMetadata {
+    #[serde(rename = "type")]
+    pub payload_type: String,
+    pub version: u8,
+    pub session_id: String,
+    pub executive_summary: String,
+    pub stats: RetrospectiveStats,
+    pub moments: Vec<Moment>,
+}
+
+/// Full OH log payload
+#[derive(Debug, Serialize)]
+pub struct RetrospectivePayload {
+    pub entity_type: String,
+    pub entity_id: String,
+    pub content: String,
+    pub content_type: String,
+    pub log_date: String,
+    pub metadata: RetrospectiveMetadata,
+}
+
+/// Format retrospective data as OH log payload
+pub fn format_oh_payload(
+    session_id: &str,
+    endeavor_id: &str,
+    total_decisions: usize,
+    result: &CurationResult,
+) -> RetrospectivePayload {
+    // Count acceptance stats
+    let accepted_count = result
+        .moments
+        .iter()
+        .filter(|m| m.accepted == Some(true))
+        .count();
+    let dismissed_count = result
+        .moments
+        .iter()
+        .filter(|m| m.accepted == Some(false))
+        .count();
+
+    // Generate markdown content for the log
+    let content = format!(
+        "## Superego Retrospective\n\n**Theme:** {}\n\n**Key Moments:** {} (from {} total decisions)\n\n{}",
+        result.executive_summary,
+        result.moments.len(),
+        total_decisions,
+        result
+            .moments
+            .iter()
+            .take(5) // Just summaries in markdown
+            .map(|m| format!("- **{}**: {}", m.title, m.summary))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+    RetrospectivePayload {
+        entity_type: "endeavor".to_string(),
+        entity_id: endeavor_id.to_string(),
+        content,
+        content_type: "markdown".to_string(),
+        log_date: today,
+        metadata: RetrospectiveMetadata {
+            payload_type: "superego_retrospective".to_string(),
+            version: 1,
+            session_id: session_id.to_string(),
+            executive_summary: result.executive_summary.clone(),
+            stats: RetrospectiveStats {
+                total_decisions,
+                curated_count: result.moments.len(),
+                accepted_count,
+                dismissed_count,
+            },
+            moments: result.moments.clone(),
+        },
+    }
 }
 
 /// Curate moments using LLM (picks key moments, generates summaries)
@@ -399,11 +499,11 @@ Rules:
     let moments: Vec<Moment> = curated
         .moments
         .into_iter()
-        .filter_map(|cm| {
+        .map(|cm| {
             // Find matching decision by timestamp
-            let matching_decision = feedback_decisions.iter().find(|d| {
-                d.timestamp.to_rfc3339().starts_with(&cm.timestamp[..19])
-            });
+            let matching_decision = feedback_decisions
+                .iter()
+                .find(|d| d.timestamp.to_rfc3339().starts_with(&cm.timestamp[..19]));
 
             let detail = matching_decision
                 .and_then(|d| d.context.clone())
@@ -421,7 +521,7 @@ Rules:
                 _ => Severity::Info,
             };
 
-            Some(Moment {
+            Moment {
                 timestamp,
                 title: cm.title,
                 summary: cm.summary,
@@ -430,7 +530,7 @@ Rules:
                 tag: cm.tag,
                 accepted: cm.accepted,
                 reaction: cm.reaction,
-            })
+            }
         })
         .collect();
 
@@ -604,18 +704,24 @@ fn generate_event_html(moment: &Moment) -> String {
     let severity_class = moment.severity.css_class();
 
     // Generate reaction HTML if available (curated mode only)
-    let reaction_html = moment.reaction.as_ref().map(|r| {
-        let (icon, status_class) = match moment.accepted {
-            Some(true) => ("✓", "accepted"),
-            Some(false) => ("✗", "dismissed"),
-            None => ("?", "unclear"),
-        };
-        format!(
-            r#"        <div class="reaction {}"><span class="reaction-icon">{}</span> {}</div>
+    let reaction_html = moment
+        .reaction
+        .as_ref()
+        .map(|r| {
+            let (icon, status_class) = match moment.accepted {
+                Some(true) => ("✓", "accepted"),
+                Some(false) => ("✗", "dismissed"),
+                None => ("?", "unclear"),
+            };
+            format!(
+                r#"        <div class="reaction {}"><span class="reaction-icon">{}</span> {}</div>
 "#,
-            status_class, icon, escape_html(r)
-        )
-    }).unwrap_or_default();
+                status_class,
+                icon,
+                escape_html(r)
+            )
+        })
+        .unwrap_or_default();
 
     format!(
         r#"      <div class="event {}">
@@ -645,7 +751,12 @@ fn generate_html(moments: Vec<Moment>, meta: SessionMeta) -> String {
     // Include executive summary in subtitle if present
     let subtitle = match &meta.executive_summary {
         Some(summary) if !summary.is_empty() => {
-            format!("Session {} • {} • {}", &meta.session_id[..8], meta.date, summary)
+            format!(
+                "Session {} • {} • {}",
+                &meta.session_id[..8],
+                meta.date,
+                summary
+            )
         }
         _ => format!("Session {} • {}", &meta.session_id[..8], meta.date),
     };
@@ -668,7 +779,10 @@ fn open_browser(path: &Path) -> Result<(), RetroError> {
     }
     #[cfg(target_os = "windows")]
     {
-        Command::new("cmd").args(["/C", "start", ""]).arg(path).spawn()?;
+        Command::new("cmd")
+            .args(["/C", "start", ""])
+            .arg(path)
+            .spawn()?;
     }
     Ok(())
 }
@@ -680,6 +794,7 @@ pub fn run(
     curated: bool,
     output: &Path,
     open: bool,
+    push_oh: bool,
 ) -> Result<(), RetroError> {
     // Find session
     let session_id = match session_id {
@@ -703,7 +818,8 @@ pub fn run(
         return Ok(());
     }
 
-    eprintln!("Found {} decisions", decisions.len());
+    let total_decisions = decisions.len();
+    eprintln!("Found {} decisions", total_decisions);
 
     // Get date from first decision
     let date = decisions
@@ -711,12 +827,17 @@ pub fn run(
         .map(|d| d.timestamp.format("%b %d, %Y").to_string())
         .unwrap_or_default();
 
-    // Convert to moments (curated mode returns executive_summary too)
-    let (moments, executive_summary) = if curated {
+    // Determine processing mode - curate if either flag is set
+    let need_curation = curated || push_oh;
+
+    // Process decisions (moves ownership into one path, no cloning)
+    let (moments, executive_summary, curation_for_oh) = if need_curation {
         let result = curate_moments(decisions)?;
-        (result.moments, Some(result.executive_summary))
+        let summary = result.executive_summary.clone();
+        let moments = result.moments.clone();
+        (moments, Some(summary), Some(result))
     } else {
-        (decisions_to_moments(decisions), None)
+        (decisions_to_moments(decisions), None, None)
     };
 
     if moments.is_empty() {
@@ -743,6 +864,60 @@ pub fn run(
     // Open in browser if requested
     if open {
         open_browser(output)?;
+    }
+
+    // Push to Open Horizons if requested
+    if push_oh {
+        if let Some(ref result) = curation_for_oh {
+            push_to_oh(superego_dir, &session_id, total_decisions, result)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Push retrospective data to Open Horizons
+fn push_to_oh(
+    superego_dir: &Path,
+    session_id: &str,
+    total_decisions: usize,
+    result: &CurationResult,
+) -> Result<(), RetroError> {
+    use crate::oh::{get_endeavor_id, OhClient};
+
+    // Get OH configuration
+    let endeavor_id = match get_endeavor_id(superego_dir) {
+        Some(id) => id,
+        None => {
+            eprintln!("OH push skipped: no oh_endeavor_id configured in .superego/config.yaml");
+            return Ok(());
+        }
+    };
+
+    let client = match OhClient::from_config(superego_dir) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!(
+                "OH push skipped: {} (set oh_api_key in config.yaml or OH_API_KEY env var)",
+                e
+            );
+            return Ok(());
+        }
+    };
+
+    // Format payload
+    let payload = format_oh_payload(session_id, &endeavor_id, total_decisions, result);
+
+    // Push to OH
+    eprintln!("Pushing retrospective to OH endeavor: {}", endeavor_id);
+    match client.log_retrospective(&payload) {
+        Ok(log_id) => {
+            eprintln!("Successfully pushed to OH (log_id: {})", log_id);
+        }
+        Err(e) => {
+            eprintln!("Failed to push to OH: {}", e);
+            // Don't fail the command, just warn
+        }
     }
 
     Ok(())

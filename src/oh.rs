@@ -28,6 +28,39 @@ impl OhConfig {
             env::var("OH_API_URL").unwrap_or_else(|_| "http://localhost:3001".to_string());
         Some(OhConfig { api_url, api_key })
     }
+
+    /// Try to load configuration from .superego/config.yaml
+    /// Priority: env vars override config file values
+    pub fn from_config(superego_dir: &Path) -> Option<Self> {
+        let config_path = superego_dir.join("config.yaml");
+        let content = fs::read_to_string(&config_path).ok()?;
+
+        // Parse oh_api_key and oh_api_url from config (env vars override)
+        let api_key = env::var("OH_API_KEY")
+            .ok()
+            .or_else(|| parse_config_value(&content, "oh_api_key"))?;
+
+        let api_url = env::var("OH_API_URL")
+            .ok()
+            .or_else(|| parse_config_value(&content, "oh_api_url"))
+            .unwrap_or_else(|| "http://localhost:3001".to_string());
+
+        Some(OhConfig { api_url, api_key })
+    }
+}
+
+/// Parse a string value from config file content
+fn parse_config_value(content: &str, key: &str) -> Option<String> {
+    for line in content.lines() {
+        let line = line.trim();
+        if let Some(value) = line.strip_prefix(key).and_then(|s| s.strip_prefix(':')) {
+            let value = value.trim().trim_matches('"').trim_matches('\'');
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+        }
+    }
+    None
 }
 
 /// Error type for OH operations
@@ -102,9 +135,15 @@ pub struct OhClient {
 }
 
 impl OhClient {
-    /// Create a new OH client if configuration is available
+    /// Create a new OH client if configuration is available (env vars only)
     pub fn new() -> Result<Self, OhError> {
         let config = OhConfig::from_env().ok_or(OhError::NotConfigured)?;
+        Ok(OhClient { config })
+    }
+
+    /// Create a new OH client from config file (with env var override)
+    pub fn from_config(superego_dir: &Path) -> Result<Self, OhError> {
+        let config = OhConfig::from_config(superego_dir).ok_or(OhError::NotConfigured)?;
         Ok(OhClient { config })
     }
 
@@ -192,6 +231,43 @@ impl OhClient {
             .map_err(|e| OhError::ParseError(format!("{}: {}", e, body)))?;
 
         Ok(wrapper.endeavor)
+    }
+
+    /// Log a retrospective to an endeavor with full metadata
+    ///
+    /// Uses the metadata JSONB field to store structured retrospective data
+    /// that OH can visualize independently.
+    pub fn log_retrospective(
+        &self,
+        payload: &crate::retro::RetrospectivePayload,
+    ) -> Result<String, OhError> {
+        let url = format!("{}/api/logs", self.config.api_url);
+
+        let response = attohttpc::post(&url)
+            .header("Authorization", format!("Bearer {}", self.config.api_key))
+            .header("Content-Type", "application/json")
+            .timeout(std::time::Duration::from_secs(10))
+            .json(payload)
+            .map_err(|e| OhError::RequestFailed(e.to_string()))?
+            .send()
+            .map_err(|e| OhError::RequestFailed(e.to_string()))?;
+
+        if !response.is_success() {
+            let status = response.status().as_u16();
+            let body = response.text().unwrap_or_default();
+            return Err(OhError::ApiError(status, body));
+        }
+
+        let body = response
+            .text()
+            .map_err(|e| OhError::ParseError(e.to_string()))?;
+        let log_response: LogResponse = serde_json::from_str(&body)
+            .map_err(|e| OhError::ParseError(format!("{}: {}", e, body)))?;
+
+        Ok(log_response
+            .log
+            .map(|l| l.id)
+            .unwrap_or_else(|| "unknown".to_string()))
     }
 
     /// Get recent logs for an endeavor

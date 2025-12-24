@@ -82,6 +82,11 @@ eval_interval_minutes: 5
 # Model and timeout (uncomment to override)
 # model: opus
 # timeout_ms: 30000
+
+# Open Horizons integration (for cross-project visibility)
+# oh_endeavor_id: initiative:abc123  # Endeavor to link this project to
+# oh_api_url: http://localhost:3001  # OH API URL (default: localhost:3001)
+# oh_api_key: your-api-key-here      # OH API key (or set OH_API_KEY env var)
 "#,
     )?;
 
