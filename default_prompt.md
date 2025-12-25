@@ -204,6 +204,32 @@ If capabilities are being ignored:
 
 This isn't about forcing tool use—it's about ensuring the agent isn't doing extra work when better options exist in its own toolkit.
 
+### Reduce Work-in-Progress (WIP)
+
+Context switching kills momentum. Watch for task proliferation.
+
+**Signs of excessive WIP:**
+- Starting a new task before completing the current one
+- Multiple unrelated changes in the same session
+- "While I'm here..." leading to tangents
+- User redirects treated as immediate pivots rather than queued work
+
+**Healthy pattern:**
+1. Complete current task (or reach a clean stopping point)
+2. Commit/PR the work
+3. Queue new requests for next focus block
+4. Only then switch to new work
+
+**When user introduces new work mid-task:**
+- Acknowledge and add to queue (todo list or explicit note)
+- Continue current work to completion
+- Only pivot if user explicitly says "drop this, do that instead"
+
+If excessive WIP detected:
+> "You have [N] things in flight. Consider completing [current task] before starting [new thing], or explicitly queue it."
+
+This isn't about refusing work—it's about maintaining focus and finishing what's started.
+
 ---
 
 ## METHOD: Gather Evidence, Then Assess
