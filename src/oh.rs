@@ -117,6 +117,46 @@ struct GetLogsResponse {
     logs: Vec<OhLogEntry>,
 }
 
+/// Guardrail from GET /api/endeavors/:id/extensions
+#[derive(Debug, Clone, Deserialize)]
+pub struct OhGuardrail {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub severity: String, // "hard", "soft", "advisory"
+    #[serde(default)]
+    pub enforcement: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub inherited_from: Option<String>,
+    #[serde(default)]
+    pub depth: i32,
+}
+
+/// Metis entry from GET /api/endeavors/:id/extensions
+#[derive(Debug, Clone, Deserialize)]
+pub struct OhMetis {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub content: String,
+    #[serde(default)]
+    pub confidence: String,
+    #[serde(default)]
+    pub freshness: String, // "recent", "stale", "historical"
+    #[serde(default)]
+    pub source: Option<String>,
+}
+
+/// Extensions response from GET /api/endeavors/:id/extensions
+#[derive(Debug, Clone, Deserialize)]
+pub struct OhExtensions {
+    pub endeavor_id: String,
+    pub guardrails: Vec<OhGuardrail>,
+    pub metis: Vec<OhMetis>,
+}
+
 /// Response from creating a log entry
 #[derive(Debug, Clone, Deserialize)]
 pub struct LogResponse {
@@ -306,6 +346,37 @@ impl OhClient {
 
         Ok(wrapper.logs)
     }
+
+    /// Get extensions (guardrails + metis) for an endeavor
+    /// Returns inherited guardrails from ancestors and relevant metis
+    pub fn get_extensions(&self, endeavor_id: &str) -> Result<OhExtensions, OhError> {
+        let url = format!(
+            "{}/api/endeavors/{}/extensions",
+            self.config.api_url,
+            urlencoding::encode(endeavor_id)
+        );
+
+        let response = attohttpc::get(&url)
+            .header("Authorization", format!("Bearer {}", self.config.api_key))
+            .header("Content-Type", "application/json")
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .map_err(|e| OhError::RequestFailed(e.to_string()))?;
+
+        if !response.is_success() {
+            let status = response.status().as_u16();
+            let body = response.text().unwrap_or_default();
+            return Err(OhError::ApiError(status, body));
+        }
+
+        let body = response
+            .text()
+            .map_err(|e| OhError::ParseError(e.to_string()))?;
+        let extensions: OhExtensions = serde_json::from_str(&body)
+            .map_err(|e| OhError::ParseError(format!("{}: {}", e, body)))?;
+
+        Ok(extensions)
+    }
 }
 
 /// Parse oh_endeavor_id from config file content
@@ -389,6 +460,15 @@ impl OhIntegration {
             }
         };
 
+        // Fetch extensions (guardrails + metis)
+        let extensions = match self.client.get_extensions(&self.endeavor_id) {
+            Ok(ext) => Some(ext),
+            Err(e) => {
+                eprintln!("Warning: failed to fetch OH extensions: {}", e);
+                None
+            }
+        };
+
         // Fetch recent logs (last 7 days)
         let logs = match self.client.get_logs(&self.endeavor_id, 7) {
             Ok(l) => l,
@@ -411,6 +491,61 @@ impl OhIntegration {
 
         if let Some(status) = &endeavor.status {
             context.push_str(&format!("STATUS: {}\n", status));
+        }
+
+        // Include guardrails (enforce these!)
+        if let Some(ref ext) = extensions {
+            if !ext.guardrails.is_empty() {
+                context.push_str("\n--- ACTIVE GUARDRAILS (enforce these!) ---\n");
+
+                // Group by severity
+                let hard: Vec<_> = ext.guardrails.iter().filter(|g| g.severity == "hard").collect();
+                let soft: Vec<_> = ext.guardrails.iter().filter(|g| g.severity == "soft").collect();
+                let advisory: Vec<_> = ext.guardrails.iter().filter(|g| g.severity == "advisory").collect();
+
+                if !hard.is_empty() {
+                    context.push_str("\nHARD (BLOCK if violated - no override):\n");
+                    for g in hard {
+                        context.push_str(&format!("• {}\n", g.title));
+                    }
+                }
+
+                if !soft.is_empty() {
+                    context.push_str("\nSOFT (BLOCK unless override rationale provided):\n");
+                    for g in soft {
+                        context.push_str(&format!("• {}\n", g.title));
+                    }
+                }
+
+                if !advisory.is_empty() {
+                    context.push_str("\nADVISORY (WARN in feedback):\n");
+                    for g in advisory {
+                        context.push_str(&format!("• {}\n", g.title));
+                    }
+                }
+
+                context.push_str("--- END GUARDRAILS ---\n");
+            }
+
+            // Include metis (situational wisdom)
+            if !ext.metis.is_empty() {
+                context.push_str("\n--- METIS (situational wisdom) ---\n");
+                for m in ext.metis.iter().take(5) {
+                    let freshness_indicator = match m.freshness.as_str() {
+                        "recent" => "🟢",
+                        "stale" => "🟡",
+                        _ => "⚪",
+                    };
+                    // Truncate long content
+                    let content = if m.content.chars().count() > 150 {
+                        format!("{}...", m.content.chars().take(150).collect::<String>())
+                    } else {
+                        m.content.clone()
+                    };
+                    context.push_str(&format!("{} {}: {}\n", freshness_indicator, m.title, content));
+                }
+                context.push_str("--- END METIS ---\n");
+            }
         }
 
         if !logs.is_empty() {
