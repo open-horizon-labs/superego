@@ -20,7 +20,7 @@
     },
     {
       "name": "oh-mcp",
-      "source": "github:cloud-atlas-ai/oh-mcp-server",
+      "source": "cloud-atlas-ai/oh-mcp-server",
       "description": "Open Horizons MCP - Connect Claude Code to strategic alignment context. Works best with superego for metacognitive feedback tied to strategic goals.",
       "version": "0.1.0",
       "author": {
