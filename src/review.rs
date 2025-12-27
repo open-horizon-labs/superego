@@ -3,10 +3,27 @@
 //! Allows users to proactively request superego review of changes.
 
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Output};
 
 use crate::claude;
 use crate::prompts;
+
+/// Run a git command and check for errors
+fn run_git(args: &[&str]) -> Result<Output, ReviewError> {
+    let output = Command::new("git")
+        .args(args)
+        .output()
+        .map_err(|e| ReviewError::GitError(e.to_string()))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stderr.trim().is_empty() {
+            return Err(ReviewError::GitError(stderr.trim().to_string()));
+        }
+    }
+
+    Ok(output)
+}
 
 /// Review target type
 #[derive(Debug)]
@@ -64,20 +81,12 @@ impl std::error::Error for ReviewError {}
 fn get_diff(target: &ReviewTarget) -> Result<(String, String), ReviewError> {
     let (diff, description) = match target {
         ReviewTarget::Staged => {
-            let output = Command::new("git")
-                .args(["diff", "--cached"])
-                .output()
-                .map_err(|e| ReviewError::GitError(e.to_string()))?;
-
+            let output = run_git(&["diff", "--cached"])?;
             let diff = String::from_utf8_lossy(&output.stdout).to_string();
 
             // If nothing staged, fall back to uncommitted
             if diff.trim().is_empty() {
-                let output = Command::new("git")
-                    .args(["diff", "HEAD"])
-                    .output()
-                    .map_err(|e| ReviewError::GitError(e.to_string()))?;
-
+                let output = run_git(&["diff", "HEAD"])?;
                 let diff = String::from_utf8_lossy(&output.stdout).to_string();
                 if diff.trim().is_empty() {
                     return Err(ReviewError::NoDiff(
@@ -92,12 +101,9 @@ fn get_diff(target: &ReviewTarget) -> Result<(String, String), ReviewError> {
         ReviewTarget::Pr => {
             // Get the base branch (usually main or master)
             let base = get_base_branch()?;
+            let diff_ref = format!("{}...HEAD", base);
 
-            let output = Command::new("git")
-                .args(["diff", &format!("{}...HEAD", base)])
-                .output()
-                .map_err(|e| ReviewError::GitError(e.to_string()))?;
-
+            let output = run_git(&["diff", &diff_ref])?;
             let diff = String::from_utf8_lossy(&output.stdout).to_string();
             if diff.trim().is_empty() {
                 return Err(ReviewError::NoDiff(format!(
@@ -108,22 +114,14 @@ fn get_diff(target: &ReviewTarget) -> Result<(String, String), ReviewError> {
             (diff, format!("PR changes vs {}", base))
         }
         ReviewTarget::File(path) => {
-            // Try staged first, then unstaged, then full file
-            let output = Command::new("git")
-                .args(["diff", "--cached", "--", path])
-                .output()
-                .map_err(|e| ReviewError::GitError(e.to_string()))?;
-
+            // Try staged first, then unstaged
+            let output = run_git(&["diff", "--cached", "--", path])?;
             let diff = String::from_utf8_lossy(&output.stdout).to_string();
 
             if !diff.trim().is_empty() {
                 (diff, format!("staged changes in {}", path))
             } else {
-                let output = Command::new("git")
-                    .args(["diff", "HEAD", "--", path])
-                    .output()
-                    .map_err(|e| ReviewError::GitError(e.to_string()))?;
-
+                let output = run_git(&["diff", "HEAD", "--", path])?;
                 let diff = String::from_utf8_lossy(&output.stdout).to_string();
                 if diff.trim().is_empty() {
                     return Err(ReviewError::NoDiff(format!("no changes in {}", path)));
