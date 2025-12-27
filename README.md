@@ -61,6 +61,7 @@ Learn more: [OH MCP Server](https://github.com/cloud-atlas-ai/oh-mcp-server) | [
 |---------|-------------|
 | `/superego:init` | Initialize superego for this project (offers binary install if needed) |
 | `/superego:status` | Check if plugin, binary, and project are configured |
+| `/superego:prompt` | Manage prompts: list, switch (code/writing), show current |
 | `/superego:enable` | Enable superego (offers init if not set up) |
 | `/superego:disable` | Temporarily disable for current session |
 | `/superego:remove` | Remove superego from project |
@@ -189,6 +190,30 @@ sg migrate  # Remove legacy hooks
 
 ## Customization
 
+### Prompt Types
+
+Superego ships with multiple prompts for different use cases:
+
+| Prompt | Description |
+|--------|-------------|
+| `code` | Metacognitive advisor for coding agents (default) |
+| `writing` | Co-author reviewer for writing and content creation |
+
+Switch prompts via CLI or slash command:
+
+```bash
+sg prompt list              # Show available prompts
+sg prompt switch writing    # Switch to writing prompt
+sg prompt show              # Show current prompt info
+
+# Or in Claude Code:
+/superego:prompt switch writing
+```
+
+Your customizations are preserved when switching—each prompt type has its own backup (`prompt.<type>.md.bak`).
+
+### Custom Prompt Editing
+
 Edit `.superego/prompt.md` to customize what superego evaluates:
 - Add project-specific guidelines
 - Adjust strictness
@@ -231,6 +256,9 @@ PreCompact hook (before context truncation)
 sg init              # Initialize superego (creates .superego/)
 sg migrate           # Remove legacy hooks (for users upgrading from < v0.4.0)
 sg reset             # Remove .superego/ directory
+sg prompt list       # Show available prompts
+sg prompt switch X   # Switch to prompt X (code, writing)
+sg prompt show       # Show current prompt info
 sg evaluate-llm      # Run LLM evaluation (called by hooks)
 sg has-feedback      # Check for pending feedback (exit 0=yes, 1=no)
 sg get-feedback      # Get and clear pending feedback
