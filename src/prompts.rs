@@ -131,9 +131,12 @@ fn set_base_prompt(superego_dir: &Path, prompt_type: PromptType) -> Result<(), P
             .position(|l| !l.trim().starts_with('#') && !l.trim().is_empty())
             .unwrap_or(new_lines.len());
 
-        new_lines.insert(insert_pos, format!("base_prompt: {}", prompt_type.name()));
+        // Insert blank line first (if not at start), then base_prompt after it
         if insert_pos > 0 {
-            new_lines.insert(insert_pos, String::new()); // Blank line before
+            new_lines.insert(insert_pos, String::new()); // Blank line
+            new_lines.insert(insert_pos + 1, format!("base_prompt: {}", prompt_type.name()));
+        } else {
+            new_lines.insert(insert_pos, format!("base_prompt: {}", prompt_type.name()));
         }
     }
 
@@ -177,8 +180,13 @@ pub fn switch(superego_dir: &Path, target: PromptType) -> Result<SwitchResult, P
         restored_from_backup: false,
     };
 
-    // If switching to same type, just refresh from template
+    // If switching to same type, backup modifications first then refresh
     if current_base == target {
+        if prompt_path.exists() && has_local_modifications(superego_dir) {
+            let backup = backup_path(superego_dir, current_base);
+            fs::copy(&prompt_path, &backup)?;
+            result.backed_up = true;
+        }
         fs::write(&prompt_path, target.content())?;
         return Ok(result);
     }
