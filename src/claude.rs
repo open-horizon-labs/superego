@@ -5,6 +5,7 @@
 //! Now just returns raw result text for natural language feedback.
 
 use serde::Deserialize;
+use serde_json::Value;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -15,6 +16,61 @@ pub struct ClaudeResponse {
     pub result: String,
     pub session_id: String,
     pub total_cost_usd: f64,
+}
+
+/// AIDEV-NOTE: Claude CLI can return either:
+/// 1. A single JSON object (expected format): `{"result":"...","session_id":"...","total_cost_usd":0.1}`
+/// 2. An array of objects (when hooks are present): `[{"type":"system",...},{"type":"result","result":"..."}]`
+///
+/// This function handles both cases robustly.
+/// If parsing fails unexpectedly, run `claude -p --output-format json "test"` to see current format.
+fn parse_claude_response(stdout: &str) -> Result<ClaudeResponse, ClaudeError> {
+    // First, try parsing as a single ClaudeResponse object (common case)
+    // Capture error for later if array parsing also fails
+    let single_obj_err = match serde_json::from_str::<ClaudeResponse>(stdout) {
+        Ok(response) => return Ok(response),
+        Err(e) => e,
+    };
+
+    // If that fails, try parsing as an array and find the "type": "result" entry
+    if let Ok(array) = serde_json::from_str::<Vec<Value>>(stdout) {
+        // Find the result entry (usually the last one)
+        for entry in array.iter().rev() {
+            if entry.get("type").and_then(|t| t.as_str()) == Some("result") {
+                // Extract result field - must be present and non-empty string
+                let result = match entry.get("result").and_then(|r| r.as_str()) {
+                    Some(s) if !s.is_empty() => s.to_string(),
+                    Some(_) => continue, // Empty string, try next entry
+                    None => continue,    // Missing or wrong type, try next entry
+                };
+
+                // session_id and total_cost_usd are optional, default to empty/0
+                let session_id = entry
+                    .get("session_id")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let total_cost_usd = entry
+                    .get("total_cost_usd")
+                    .and_then(|c| c.as_f64())
+                    .unwrap_or(0.0);
+
+                return Ok(ClaudeResponse {
+                    result,
+                    session_id,
+                    total_cost_usd,
+                });
+            }
+        }
+
+        // Array found but no valid result entry
+        return Err(ClaudeError::CommandFailed(
+            "Claude response array contains no valid 'result' entry (missing or empty result field)".to_string(),
+        ));
+    }
+
+    // Neither format worked - return the original parse error
+    Err(ClaudeError::ParseError(single_obj_err))
 }
 
 /// Error type for Claude invocation
@@ -149,8 +205,7 @@ pub fn invoke(
                     };
                     return Err(ClaudeError::CommandFailed(error_msg));
                 }
-                let response: ClaudeResponse = serde_json::from_str(&stdout)?;
-                return Ok(response);
+                return parse_claude_response(&stdout);
             }
             None => {
                 if start.elapsed() > timeout {
@@ -192,5 +247,177 @@ mod tests {
             serde_json::from_str(stdout.trim()).expect("Should parse JSON");
         assert_eq!(response.result, "test");
         assert_eq!(response.session_id, "abc");
+    }
+
+    /// Test parsing single object format (standard case)
+    #[test]
+    fn test_parse_single_object_response() {
+        let json = r#"{"result":"Hello!","session_id":"abc-123","total_cost_usd":0.05}"#;
+        let response = parse_claude_response(json).expect("Should parse single object");
+        assert_eq!(response.result, "Hello!");
+        assert_eq!(response.session_id, "abc-123");
+        assert!((response.total_cost_usd - 0.05).abs() < 0.001);
+    }
+
+    /// Test parsing array format (when hooks add entries before the result)
+    /// This is the format reported in GitHub issue #20
+    #[test]
+    fn test_parse_array_response_with_hooks() {
+        let json = r#"[
+            {"type":"system","subtype":"hook_response","session_id":"test-session"},
+            {"type":"system","subtype":"init","session_id":"test-session"},
+            {"type":"assistant","message":{"content":[{"type":"text","text":"Hi!"}]}},
+            {"type":"result","subtype":"success","result":"Hi! How can I help?","session_id":"test-session","total_cost_usd":0.12}
+        ]"#;
+
+        let response = parse_claude_response(json).expect("Should parse array format");
+        assert_eq!(response.result, "Hi! How can I help?");
+        assert_eq!(response.session_id, "test-session");
+        assert!((response.total_cost_usd - 0.12).abs() < 0.001);
+    }
+
+    /// Test that array without result entry gives helpful error
+    #[test]
+    fn test_parse_array_without_result_entry() {
+        let json = r#"[
+            {"type":"system","subtype":"hook_response"},
+            {"type":"assistant","message":{}}
+        ]"#;
+
+        let err = parse_claude_response(json).unwrap_err();
+        match err {
+            ClaudeError::CommandFailed(msg) => {
+                assert!(
+                    msg.contains("no valid 'result' entry"),
+                    "Error should mention missing result: {}",
+                    msg
+                );
+            }
+            _ => panic!("Expected CommandFailed error, got: {:?}", err),
+        }
+    }
+
+    /// Test that empty array gives helpful error
+    #[test]
+    fn test_parse_empty_array() {
+        let json = "[]";
+        let err = parse_claude_response(json).unwrap_err();
+        match err {
+            ClaudeError::CommandFailed(msg) => {
+                assert!(
+                    msg.contains("no valid 'result' entry"),
+                    "Error should mention missing result: {}",
+                    msg
+                );
+            }
+            _ => panic!("Expected CommandFailed error, got: {:?}", err),
+        }
+    }
+
+    /// Test that result entry with wrong type for result field is skipped
+    #[test]
+    fn test_parse_array_result_wrong_type() {
+        // result is a number instead of string - should fail
+        let json = r#"[
+            {"type":"result","result":123,"session_id":"test","total_cost_usd":0.1}
+        ]"#;
+
+        let err = parse_claude_response(json).unwrap_err();
+        match err {
+            ClaudeError::CommandFailed(msg) => {
+                assert!(
+                    msg.contains("no valid 'result' entry"),
+                    "Error should mention invalid result: {}",
+                    msg
+                );
+            }
+            _ => panic!("Expected CommandFailed error, got: {:?}", err),
+        }
+    }
+
+    /// Test that result entry with empty result string is skipped
+    #[test]
+    fn test_parse_array_empty_result_string() {
+        // result is empty string - should fail
+        let json = r#"[
+            {"type":"result","result":"","session_id":"test","total_cost_usd":0.1}
+        ]"#;
+
+        let err = parse_claude_response(json).unwrap_err();
+        match err {
+            ClaudeError::CommandFailed(msg) => {
+                assert!(
+                    msg.contains("no valid 'result' entry"),
+                    "Error should mention invalid result: {}",
+                    msg
+                );
+            }
+            _ => panic!("Expected CommandFailed error, got: {:?}", err),
+        }
+    }
+
+    /// Test that result entry missing result field is skipped
+    #[test]
+    fn test_parse_array_missing_result_field() {
+        // type is "result" but no result field
+        let json = r#"[
+            {"type":"result","session_id":"test","total_cost_usd":0.1}
+        ]"#;
+
+        let err = parse_claude_response(json).unwrap_err();
+        match err {
+            ClaudeError::CommandFailed(msg) => {
+                assert!(
+                    msg.contains("no valid 'result' entry"),
+                    "Error should mention missing result: {}",
+                    msg
+                );
+            }
+            _ => panic!("Expected CommandFailed error, got: {:?}", err),
+        }
+    }
+
+    /// Test that result entry with null result value is skipped
+    #[test]
+    fn test_parse_array_result_null() {
+        let json = r#"[
+            {"type":"result","result":null,"session_id":"test","total_cost_usd":0.1}
+        ]"#;
+
+        let err = parse_claude_response(json).unwrap_err();
+        match err {
+            ClaudeError::CommandFailed(msg) => {
+                assert!(
+                    msg.contains("no valid 'result' entry"),
+                    "Error should mention invalid result: {}",
+                    msg
+                );
+            }
+            _ => panic!("Expected CommandFailed error, got: {:?}", err),
+        }
+    }
+
+    /// Test that invalid result entries are skipped to find valid ones
+    /// This verifies the `continue` logic works when multiple result entries exist
+    #[test]
+    fn test_parse_array_skips_invalid_finds_valid() {
+        // Array has two result entries: first is valid, second (last) is invalid
+        // Since we iterate in reverse, we skip the invalid one and find the valid one
+        let json = r#"[
+            {"type":"result","result":"Valid result","session_id":"s1","total_cost_usd":0.05},
+            {"type":"result","result":"","session_id":"s2","total_cost_usd":0.10}
+        ]"#;
+
+        let response = parse_claude_response(json).expect("Should find valid entry");
+        assert_eq!(response.result, "Valid result");
+        assert_eq!(response.session_id, "s1");
+    }
+
+    /// Test that invalid JSON returns parse error
+    #[test]
+    fn test_parse_invalid_json() {
+        let json = "not valid json at all";
+        let err = parse_claude_response(json).unwrap_err();
+        assert!(matches!(err, ClaudeError::ParseError(_)));
     }
 }
