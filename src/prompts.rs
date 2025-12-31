@@ -1,6 +1,6 @@
 //! Prompt management for superego
 //!
-//! Handles multiple prompt templates (code, writing) with switching and backup.
+//! Handles multiple prompt templates (code, writing, learning) with switching and backup.
 
 use std::fs;
 use std::path::Path;
@@ -10,12 +10,13 @@ use std::path::Path;
 pub enum PromptType {
     Code,
     Writing,
+    Learning,
 }
 
 impl PromptType {
     /// All available prompt types
     pub fn all() -> &'static [PromptType] {
-        &[PromptType::Code, PromptType::Writing]
+        &[PromptType::Code, PromptType::Writing, PromptType::Learning]
     }
 
     /// Get prompt type from string name
@@ -23,6 +24,7 @@ impl PromptType {
         match name.to_lowercase().as_str() {
             "code" => Some(PromptType::Code),
             "writing" => Some(PromptType::Writing),
+            "learning" => Some(PromptType::Learning),
             _ => None,
         }
     }
@@ -32,6 +34,7 @@ impl PromptType {
         match self {
             PromptType::Code => "code",
             PromptType::Writing => "writing",
+            PromptType::Learning => "learning",
         }
     }
 
@@ -40,6 +43,7 @@ impl PromptType {
         match self {
             PromptType::Code => "Metacognitive advisor for coding agents",
             PromptType::Writing => "Co-author reviewer for writing and content creation",
+            PromptType::Learning => "Learning coach for teaching approaches - ensures learning is hands-on and verifiable",
         }
     }
 
@@ -48,6 +52,7 @@ impl PromptType {
         match self {
             PromptType::Code => include_str!("prompts/code.md"),
             PromptType::Writing => include_str!("prompts/writing.md"),
+            PromptType::Learning => include_str!("prompts/learning.md"),
         }
     }
 }

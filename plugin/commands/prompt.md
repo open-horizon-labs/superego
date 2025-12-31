@@ -5,7 +5,7 @@ Manage superego prompts for this project. Available actions:
 ## Usage
 
 - `/superego-prompt` or `/superego-prompt list` — List available prompts
-- `/superego-prompt switch <name>` — Switch to a different prompt (code, writing)
+- `/superego-prompt switch <name>` — Switch to a different prompt (code, writing, learning)
 - `/superego-prompt show` — Show current prompt info
 
 ## Actions
@@ -33,5 +33,6 @@ Run `sg prompt show` to display:
 
 - The `code` prompt is for coding/development work (default)
 - The `writing` prompt is for content creation, writing, and editing
+- The `learning` prompt is for reviewing teaching/tutoring approaches - ensures learning is hands-on and verifiable
 - Customizations are preserved: switching backs up your changes and restores them when you switch back
 - If `.superego/` doesn't exist, suggest running `/superego-init` first
