@@ -99,6 +99,13 @@ fi
 
 log "Evaluation complete"
 
+# Trigger wm extraction in background (graceful if wm not installed)
+# AIDEV-NOTE: wm extract captures tacit knowledge from the transcript
+if command -v wm >/dev/null 2>&1; then
+    log "Triggering wm extract in background"
+    wm extract --transcript "$TRANSCRIPT_PATH" --background 2>/dev/null &
+fi
+
 # Check if there's feedback to deliver (file exists and non-empty)
 # Use atomic move to prevent race conditions with concurrent hooks
 if [ -s "$FEEDBACK_PATH" ]; then

@@ -91,6 +91,13 @@ run_eval() {
 
     log "Evaluation complete"
 
+    # Trigger wm extraction in background (graceful if wm not installed)
+    # AIDEV-NOTE: wm extract captures tacit knowledge from the transcript
+    if command -v wm >/dev/null 2>&1; then
+        log "Triggering wm extract in background"
+        wm extract --transcript "$TRANSCRIPT_PATH" --background 2>/dev/null &
+    fi
+
     # Check for feedback (atomic move)
     if [ -s "$FEEDBACK_PATH" ]; then
         local temp_feedback="$FEEDBACK_PATH.$$"
