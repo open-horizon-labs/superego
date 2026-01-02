@@ -37,9 +37,20 @@ skills = true
 ### 3. Install the skill
 
 ```bash
-mkdir -p ~/.codex/skills/superego
+# Create directory structure
+mkdir -p ~/.codex/skills/superego/agents
+
+# Install skill definition
 curl -o ~/.codex/skills/superego/SKILL.md \
   https://raw.githubusercontent.com/cloud-atlas-ai/superego/main/codex-skill/SKILL.md
+
+# Install agent files (optional, for advisory roles)
+curl -o ~/.codex/skills/superego/agents/code.md \
+  https://raw.githubusercontent.com/cloud-atlas-ai/superego/main/codex-skill/agents/code.md
+curl -o ~/.codex/skills/superego/agents/writing.md \
+  https://raw.githubusercontent.com/cloud-atlas-ai/superego/main/codex-skill/agents/writing.md
+curl -o ~/.codex/skills/superego/agents/learning.md \
+  https://raw.githubusercontent.com/cloud-atlas-ai/superego/main/codex-skill/agents/learning.md
 ```
 
 ### 4. Initialize superego in your project
@@ -96,17 +107,66 @@ When invoked, the skill:
 
 ## Commands
 
-The skill uses the `sg evaluate-codex` command under the hood:
+### Core Evaluation (Stable)
 
 ```bash
-# Run evaluation manually
-sg evaluate-codex
+$superego               # Evaluate current conversation
+sg evaluate-codex       # Manual evaluation
 
 # Output:
-# {"has_concerns": true, "cost_usd": 0.05}
-# Feedback:
-# <feedback text>
+# {"has_concerns": true, "tokens": 5000}
+# Feedback: <feedback text>
 ```
+
+### New Features (v0.8.0 - Pending Codex Testing)
+
+The v0.8.0 binary adds these features. They work when running `sg` directly from the command line. Integration via `$superego` skill in Codex is pending testing.
+
+**Multi-Prompt Support:**
+```bash
+sg prompt list              # List available prompts
+sg prompt switch writing    # Switch to writing prompt
+sg prompt switch learning   # Switch to learning prompt
+sg prompt switch code       # Back to code prompt (default)
+sg prompt show              # Show current prompt info
+```
+
+Available prompts: **code** (default), **writing**, **learning**
+
+The evaluation respects the active prompt from `.superego/config.yaml`.
+
+**On-Demand Review:**
+```bash
+sg review            # Review staged changes (git diff --cached)
+sg review pr         # Review PR diff vs base branch
+sg review <file>     # Review specific file
+```
+
+**Agent Files:**
+
+Three agent files are available for copying into your project's `AGENTS.md`:
+- `~/.codex/skills/superego/agents/code.md` - Conversational coding advisor
+- `~/.codex/skills/superego/agents/writing.md` - Conversational writing reviewer
+- `~/.codex/skills/superego/agents/learning.md` - Conversational learning coach
+
+Copy the relevant agent content into your `AGENTS.md` to give Codex specialized advisory guidance.
+
+See [SKILL.md](./SKILL.md) for the full skill definition including these new commands.
+
+## Testing Status
+
+**What's been tested:**
+- ✅ Core evaluation via `$superego` skill
+- ✅ Binary commands work when run directly
+- ✅ Multi-prompt support in `sg evaluate-codex`
+- ✅ bd/wm integration
+
+**Pending verification in Codex sessions:**
+- ❓ `$superego prompt ...` commands via skill
+- ❓ `$superego review ...` commands via skill
+- ❓ Agent file workflow in practice
+
+If you test these features, please report results in a GitHub issue.
 
 ## Requirements
 

@@ -8,6 +8,8 @@ Add this to your project's AGENTS.md (or ~/.codex/AGENTS.md for global):
 
 This project uses superego for metacognitive oversight. You have the `$superego` skill available.
 
+### Core Evaluation
+
 **When to use $superego:**
 - **Before committing to a plan or approach** - when you've decided HOW to solve something
 - **When choosing between alternatives** - before picking option A vs B vs C
@@ -24,3 +26,48 @@ The key insight: superego catches strategic mistakes (wrong approach, over-engin
 4. If `skipped: true` - proceed normally (this is fine, not an error)
 
 **Do not skip superego evaluation** for planning or non-trivial work. The user expects metacognitive oversight on this project.
+
+### Multi-Prompt Support
+
+Superego supports three specialized prompts for different types of work:
+
+- **code** (default) - Metacognitive advisor for software development
+  - Focus: Intent clarity, necessary, sufficient, fits goal, open horizons
+  - Use for: coding, architecture, technical decisions
+
+- **writing** - Co-author reviewer for content creation
+  - Focus: Audience clarity, resonance, carry-forward value
+  - Use for: blog posts, documentation, essays
+
+- **learning** - Learning coach for teaching approaches
+  - Focus: Hands-on vs abstract, verifiable through experience, doing > understanding
+  - Use for: tutorials, educational content, explaining concepts
+
+**Switch prompts:**
+```bash
+$superego prompt switch writing   # Switch to writing prompt
+$superego prompt switch learning  # Switch to learning prompt
+$superego prompt switch code      # Back to code prompt
+$superego prompt list             # See all available prompts
+```
+
+### On-Demand Review
+
+Get advisory feedback on changes without blocking:
+
+```bash
+$superego review            # Review staged changes
+$superego review pr         # Review PR diff
+$superego review <file>     # Review specific file
+```
+
+Uses the current active prompt (code/writing/learning).
+
+### Agent Files
+
+For specialized advisory roles, see:
+- `codex-skill/agents/code.md` - Conversational coding advisor
+- `codex-skill/agents/writing.md` - Conversational writing reviewer
+- `codex-skill/agents/learning.md` - Conversational learning coach
+
+These provide real-time observations during work. Use `$superego` for formal evaluation at decision points.

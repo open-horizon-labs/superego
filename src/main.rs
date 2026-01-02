@@ -653,19 +653,38 @@ fn main() {
                 context_kb
             ));
 
-            // Load system prompt
+            // Load system prompt (respect config-based prompt selection)
             let prompt_path = superego_dir.join("prompt.md");
             let system_prompt = if prompt_path.exists() {
-                std::fs::read_to_string(&prompt_path)
-                    .unwrap_or_else(|_| include_str!("../default_prompt.md").to_string())
+                std::fs::read_to_string(&prompt_path).unwrap_or_else(|_| {
+                    // Fallback to embedded prompt based on config
+                    let prompt_type =
+                        prompts::get_current_base(superego_dir).unwrap_or(prompts::PromptType::Code);
+                    prompt_type.content().to_string()
+                })
             } else {
-                include_str!("../default_prompt.md").to_string()
+                // No prompt.md - use embedded prompt based on config
+                let prompt_type =
+                    prompts::get_current_base(superego_dir).unwrap_or(prompts::PromptType::Code);
+                prompt_type.content().to_string()
+            };
+
+            // Get bd task context (only include if there IS a task - for drift detection)
+            let bd_context = match bd::evaluate() {
+                Ok(eval) => {
+                    if let Some(task) = eval.current_task {
+                        format!("CURRENT TASK: {} - {}\n\n", task.id, task.title)
+                    } else {
+                        String::new() // No task = no context (don't prime workflow concerns)
+                    }
+                }
+                Err(_) => String::new(),
             };
 
             let message = format!(
                 "Review the following Codex conversation and provide feedback.\n\n\
-                --- CONVERSATION ---\n{}\n--- END CONVERSATION ---",
-                context
+                {}--- CONVERSATION ---\n{}\n--- END CONVERSATION ---",
+                bd_context, context
             );
 
             log("Calling Codex LLM...");
@@ -695,6 +714,14 @@ fn main() {
                         log("ALLOW - no concerns");
                         eprintln!("No concerns.");
                     }
+
+                    // Trigger wm extract in background if wm is available
+                    let _ = std::process::Command::new("wm")
+                        .args(["extract", "--transcript", session_path.to_str().unwrap_or("")])
+                        .stdin(std::process::Stdio::null())
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .spawn();
                 }
                 Err(codex_llm::CodexLlmError::RateLimited { resets_in_seconds }) => {
                     let msg = if let Some(secs) = resets_in_seconds {
