@@ -1,6 +1,6 @@
 ---
 name: superego
-description: Metacognitive oversight. Invoke with "$superego" to evaluate, "$superego init" to set up, "$superego remove" to uninstall.
+description: Metacognitive oversight. Invoke with "$superego" to evaluate, "$superego init" to set up, "$superego update" to update, "$superego remove" to uninstall.
 ---
 
 # Superego - Metacognitive Oversight
@@ -141,6 +141,45 @@ sg review src/main.rs
 **Uses:** Current active prompt (code/writing/learning)
 
 **Tell user:** Show the review feedback and explain it uses the current prompt type.
+
+## $superego update
+
+Download and install the latest superego skill files.
+
+**Run:**
+```bash
+SKILL_DIR="$HOME/.codex/skills/superego"
+
+# Backup current skill
+if [ -f "$SKILL_DIR/SKILL.md" ]; then
+  cp "$SKILL_DIR/SKILL.md" "$SKILL_DIR/SKILL.md.bak"
+fi
+
+# Download latest files
+echo "Downloading latest skill files..."
+for file in SKILL.md agents/code.md agents/writing.md agents/learning.md; do
+  mkdir -p "$(dirname "$SKILL_DIR/$file")"
+  curl -fsSL -o "$SKILL_DIR/$file" \
+    "https://raw.githubusercontent.com/cloud-atlas-ai/superego/main/codex-skill/$file"
+done
+
+# Update binary if installed
+if command -v sg >/dev/null; then
+  echo "Updating superego binary..."
+  if command -v brew >/dev/null; then
+    brew upgrade superego 2>/dev/null || true
+  elif command -v cargo >/dev/null; then
+    cargo install superego --force
+  fi
+  echo "Binary version: $(sg --version)"
+fi
+
+echo "✓ Skill files updated. Restart Codex to apply changes."
+```
+
+**Tell user:** "Updated superego skill to latest version. Restart Codex to reload."
+
+**If errors occur:** Tell user to check their internet connection or try again later.
 
 ## $superego remove
 
