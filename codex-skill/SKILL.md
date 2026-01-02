@@ -40,9 +40,28 @@ command -v sg || cargo install superego
 sg init
 ```
 
-**Step 3:** Add this section to the project's AGENTS.md (create the file if needed):
+**Step 3:** Offer to add comprehensive guidance to AGENTS.md:
 
-```markdown
+Ask user: "Would you like me to add comprehensive superego guidance to AGENTS.md? This includes multi-prompt support, review commands, and usage examples. [Y/n]"
+
+**If yes:**
+```bash
+# Verify skill is installed
+if [ ! -f ~/.codex/skills/superego/AGENTS.md.snippet ]; then
+  echo "ERROR: Superego skill files not found."
+  echo "Run '$superego update' to download the latest skill files."
+  exit 1
+fi
+
+# Append comprehensive guidance (skip header lines)
+tail -n +5 ~/.codex/skills/superego/AGENTS.md.snippet >> AGENTS.md
+echo "✓ Added comprehensive superego guidance to AGENTS.md"
+```
+
+**If no, add minimal section:**
+```bash
+cat >> AGENTS.md << 'EOF'
+
 ## Superego Metacognitive Oversight
 
 This project uses superego. You have the `$superego` skill available.
@@ -57,6 +76,7 @@ This project uses superego. You have the `$superego` skill available.
 Superego catches strategic mistakes. Use it at **decision points**.
 
 **Results:** `has_concerns: true` = STOP and show user; `skipped: true` = proceed normally.
+EOF
 ```
 
 **Step 4:** Confirm to user: "Superego initialized. I'll use $superego at decision points."
@@ -144,18 +164,21 @@ sg review src/main.rs
 
 ## $superego update
 
-Download and install the latest superego skill files.
+Download and install the latest superego skill and binary.
 
 **Run:**
 ```bash
 SKILL_DIR="$HOME/.codex/skills/superego"
 
-# Backup current skill
+# Get current binary version
+CURRENT=$(sg --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "not installed")
+echo "Current version: $CURRENT"
+
+# Backup and download latest skill files
 if [ -f "$SKILL_DIR/SKILL.md" ]; then
   cp "$SKILL_DIR/SKILL.md" "$SKILL_DIR/SKILL.md.bak"
 fi
 
-# Download latest files
 echo "Downloading latest skill files..."
 for file in SKILL.md agents/code.md agents/writing.md agents/learning.md; do
   mkdir -p "$(dirname "$SKILL_DIR/$file")"
@@ -163,21 +186,27 @@ for file in SKILL.md agents/code.md agents/writing.md agents/learning.md; do
     "https://raw.githubusercontent.com/cloud-atlas-ai/superego/main/codex-skill/$file"
 done
 
-# Update binary if installed
+# Update binary (package managers handle version checking)
 if command -v sg >/dev/null; then
-  echo "Updating superego binary..."
-  if command -v brew >/dev/null; then
-    brew upgrade superego 2>/dev/null || true
+  echo "Updating binary..."
+  if command -v brew >/dev/null && brew list superego >/dev/null 2>&1; then
+    brew upgrade superego 2>/dev/null || echo "Already up to date"
   elif command -v cargo >/dev/null; then
     cargo install superego --force
   fi
-  echo "Binary version: $(sg --version)"
+
+  NEW=$(sg --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+  if [ "$CURRENT" != "$NEW" ]; then
+    echo "✓ Updated binary: v$CURRENT → v$NEW"
+  else
+    echo "✓ Binary already up to date: v$CURRENT"
+  fi
 fi
 
-echo "✓ Skill files updated. Restart Codex to apply changes."
+echo "✓ Update complete. Restart Codex to reload skill files."
 ```
 
-**Tell user:** "Updated superego skill to latest version. Restart Codex to reload."
+**Tell user:** Show the version update summary or "already up to date" message, then "Restart Codex to reload the skill."
 
 **If errors occur:** Tell user to check their internet connection or try again later.
 
