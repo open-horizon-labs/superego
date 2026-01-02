@@ -658,8 +658,8 @@ fn main() {
             let system_prompt = if prompt_path.exists() {
                 std::fs::read_to_string(&prompt_path).unwrap_or_else(|_| {
                     // Fallback to embedded prompt based on config
-                    let prompt_type =
-                        prompts::get_current_base(superego_dir).unwrap_or(prompts::PromptType::Code);
+                    let prompt_type = prompts::get_current_base(superego_dir)
+                        .unwrap_or(prompts::PromptType::Code);
                     prompt_type.content().to_string()
                 })
             } else {
@@ -717,7 +717,11 @@ fn main() {
 
                     // Trigger wm extract in background if wm is available
                     let _ = std::process::Command::new("wm")
-                        .args(["extract", "--transcript", session_path.to_str().unwrap_or("")])
+                        .args([
+                            "extract",
+                            "--transcript",
+                            session_path.to_str().unwrap_or(""),
+                        ])
                         .stdin(std::process::Stdio::null())
                         .stdout(std::process::Stdio::null())
                         .stderr(std::process::Stdio::null())
