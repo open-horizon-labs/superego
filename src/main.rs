@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use std::path::Path;
 
 mod audit;
-mod bd;
+mod ba;
 mod claude;
 mod codex_llm;
 mod config;

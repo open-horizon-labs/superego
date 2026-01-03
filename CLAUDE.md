@@ -36,7 +36,7 @@ cargo run -- <args>      # Run with args (e.g., cargo run -- init)
 - `transcript/` - Parses Claude Code JSONL transcript files
   - `types.rs` - Serde structs for transcript entries (User, Assistant, Summary, etc.)
   - `reader.rs` - Reads and filters transcript messages since last evaluation; dedupes system reminders (keeps last)
-- `bd.rs` - Integration with beads (`bd`) task tracking; provides current task context
+- `ba.rs` - Integration with ba task tracking; provides current task context
 - `state.rs` - Manages `.superego/state.json` (last_evaluated timestamp)
 - `decision.rs` - Decision journal for audit trail; `read_all_sessions()` aggregates from all session dirs
 - `feedback.rs` - Feedback queue (`.superego/feedback` file)

@@ -7,7 +7,7 @@ use std::path::Path;
 
 use chrono::Duration;
 
-use crate::bd;
+use crate::ba;
 use crate::claude::{self, ClaudeOptions};
 use crate::config::Config;
 use crate::decision::{Decision, DecisionType, Journal};
@@ -319,8 +319,8 @@ pub fn evaluate_llm(
         include_str!("../default_prompt.md").to_string()
     };
 
-    // Get bd task context (only include if there IS a task - for drift detection)
-    let bd_context = match bd::evaluate() {
+    // Get ba task context (only include if there IS a task - for drift detection)
+    let ba_context = match ba::evaluate() {
         Ok(eval) => {
             if let Some(task) = eval.current_task {
                 format!("CURRENT TASK: {} - {}\n\n", task.id, task.title)
@@ -353,14 +353,14 @@ pub fn evaluate_llm(
         String::new()
     };
 
-    // Build message for superego - include carryover, bd context, OH context, and pending change
+    // Build message for superego - include carryover, ba context, OH context, and pending change
     // AIDEV-NOTE: carryover_context provides continuity without session resumption
     let message = format!(
         "Review the following Claude Code conversation and provide feedback.\n\n\
         {}{}{}--- CONVERSATION ---\n\
         {}\n\
         --- END CONVERSATION ---{}",
-        carryover_context, bd_context, oh_context, context, pending_context
+        carryover_context, ba_context, oh_context, context, pending_context
     );
 
     // Call Claude - each evaluation is isolated (no session resumption)
