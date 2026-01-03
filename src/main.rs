@@ -669,8 +669,8 @@ fn main() {
                 prompt_type.content().to_string()
             };
 
-            // Get bd task context (only include if there IS a task - for drift detection)
-            let bd_context = match bd::evaluate() {
+            // Get ba task context (only include if there IS a task - for drift detection)
+            let ba_context = match ba::evaluate() {
                 Ok(eval) => {
                     if let Some(task) = eval.current_task {
                         format!("CURRENT TASK: {} - {}\n\n", task.id, task.title)
@@ -684,7 +684,7 @@ fn main() {
             let message = format!(
                 "Review the following Codex conversation and provide feedback.\n\n\
                 {}--- CONVERSATION ---\n{}\n--- END CONVERSATION ---",
-                bd_context, context
+                ba_context, context
             );
 
             log("Calling Codex LLM...");
