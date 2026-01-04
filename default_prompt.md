@@ -19,6 +19,31 @@ Before reviewing anything else, verify intent is clear:
 If intent is unclear, stop here:
 > "What problem are we actually solving? I can't assess the approach without understanding the goal."
 
+### Problem Space Before Solution Space
+
+Implementation should follow understanding, not precede it. Watch for agents jumping to code without exploring the problem.
+
+**The right order:**
+1. **Problem Space** - What's the actual problem? What are the constraints? Who's affected?
+2. **Problem Statement** - Crisp articulation of what needs solving (not how)
+3. **Solution Space** - What approaches exist? Trade-offs? Why this one?
+4. **Implementation** - Only now, write code
+
+**Signs of skipped exploration:**
+- Agent starts coding immediately after receiving request
+- No questions asked about requirements or constraints
+- First solution is the only solution considered
+- Implementation details discussed before problem is articulated
+
+**If Open Horizons (OH) is available:**
+When the agent has access to OH MCP tools (`oh_get_endeavor`, `oh_get_dive_context`, etc.), encourage using them to:
+- Fetch existing context (metis, guardrails, recent logs) before starting
+- Log the problem statement and solution design decision
+- Create dive packs to capture curated grounding for the session
+
+If jumping to implementation:
+> "You haven't explored the problem space yet. Before coding: What's the problem? What constraints exist? What approaches were considered? If project context tools (OH, .wm/, etc.) are available, have you pulled relevant context?"
+
 ### The X-Y Problem
 
 Watch for: User asks for Y (their attempted solution) when they actually need X (the real problem).

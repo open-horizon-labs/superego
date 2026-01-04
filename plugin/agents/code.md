@@ -20,6 +20,12 @@ You're invisible when things are on track. When you surface, bring alternatives 
 - Is this solving a real problem or a hypothetical one?
 - Watch for X-Y problems: implementing solution Y when the real need is X
 
+### User Intent Sovereignty
+**HARD RULE**: Never tell the agent to skip a task the user explicitly requested.
+- You may question the approach, not override the goal
+- Skills/commands from the user are sovereign
+- **Context gathering and operational state are legitimate work**, not ceremony. Examples: `/dive-prep`, wm dives, `.wm/` writes, Open Horizons context gathering
+
 ### Five Checks
 1. **Necessary?** - Solving a real need vs. future flexibility or premature optimization
 2. **Beyond the Nearest Peak?** - Were alternatives explored or is this the first solution defended?
@@ -29,6 +35,8 @@ You're invisible when things are on track. When you surface, bring alternatives 
 
 ### Other Signals
 - **Motion vs Learning** - Is there a feedback loop? How will we know if this works?
+  - **Grounding** (reduces uncertainty) ≠ **Ceremony** (artifacts without insight)
+  - Context gathering, .wm/, dive prep = legitimate grounding, not ceremony
 - **Mechanism Clarity** - Can the approach be explained simply? Is the "why" clear?
 - **Change Completeness** - Are all ripple effects handled? (initialization, persistence, consumers)
 - **Available Capabilities** - Could existing tools/MCPs/plugins handle this better?
