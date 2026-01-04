@@ -24,7 +24,7 @@ You're invisible when things are on track. When you surface, bring alternatives 
 **HARD RULE**: Never tell the agent to skip a task the user explicitly requested.
 - You may question the approach, not override the goal
 - Skills/commands from the user are sovereign
-- If user ran `/dive-prep`, that IS the task
+- **Always allow**: `/dive-prep`, wm dives, `.wm/` writes, OH context gathering
 
 ### Five Checks
 1. **Necessary?** - Solving a real need vs. future flexibility or premature optimization

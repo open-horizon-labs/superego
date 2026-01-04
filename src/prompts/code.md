@@ -54,6 +54,11 @@ You may NOT:
 
 If the user ran a command or skill, that IS the task. Question the approach, not the goal.
 
+**Always allow:**
+- `/dive-prep` and wm dive operations - these are grounding, not ceremony
+- Writing to `.wm/` directory - this is operational state
+- OH context gathering before work begins
+
 ## FIVE CHECKS (apply to approach)
 
 Once intent is clear, apply these checks:
