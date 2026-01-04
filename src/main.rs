@@ -81,8 +81,14 @@ enum Commands {
     /// Check hooks and auto-update if outdated
     Check,
 
-    /// Output current evaluation mode (always or pull)
-    Mode,
+    /// Get or set evaluation mode
+    ///
+    /// Without argument: outputs current mode (always or pull)
+    /// With argument: sets mode to "always" or "pull"
+    Mode {
+        /// Mode to set (always or pull). If omitted, shows current mode.
+        mode: Option<String>,
+    },
 
     /// Audit decision history with LLM analysis
     Audit {
@@ -373,10 +379,69 @@ fn main() {
                 std::process::exit(1);
             }
         },
-        Commands::Mode => {
+        Commands::Mode { mode } => {
             let superego_dir = Path::new(".superego");
-            let cfg = config::Config::load(superego_dir);
-            println!("{}", cfg.mode.as_str());
+
+            match mode {
+                None => {
+                    // Show current mode
+                    let cfg = config::Config::load(superego_dir);
+                    println!("{}", cfg.mode.as_str());
+                }
+                Some(new_mode) => {
+                    // Set mode
+                    let parsed = config::Mode::from_str(&new_mode);
+                    match parsed {
+                        Some(m) => {
+                            let config_path = superego_dir.join("config.yaml");
+                            if !config_path.exists() {
+                                eprintln!("No .superego/config.yaml found. Run 'sg init' first.");
+                                std::process::exit(1);
+                            }
+
+                            // Read existing config
+                            let content = match std::fs::read_to_string(&config_path) {
+                                Ok(c) => c,
+                                Err(e) => {
+                                    eprintln!("Failed to read config: {}", e);
+                                    std::process::exit(1);
+                                }
+                            };
+
+                            // Update or add mode line
+                            let mut lines: Vec<String> = content.lines().map(String::from).collect();
+                            let mut found = false;
+                            for line in &mut lines {
+                                if line.trim().starts_with("mode:") {
+                                    *line = format!("mode: {}", m.as_str());
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if !found {
+                                // Add mode after any initial comments
+                                let insert_pos = lines
+                                    .iter()
+                                    .position(|l| !l.trim().starts_with('#') && !l.trim().is_empty())
+                                    .unwrap_or(lines.len());
+                                lines.insert(insert_pos, format!("mode: {}", m.as_str()));
+                            }
+
+                            // Write back
+                            if let Err(e) = std::fs::write(&config_path, lines.join("\n") + "\n") {
+                                eprintln!("Failed to write config: {}", e);
+                                std::process::exit(1);
+                            }
+
+                            println!("Mode set to: {}", m.as_str());
+                        }
+                        None => {
+                            eprintln!("Invalid mode '{}'. Use 'always' or 'pull'.", new_mode);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            }
         }
         Commands::Audit { json } => {
             let superego_dir = Path::new(".superego");
