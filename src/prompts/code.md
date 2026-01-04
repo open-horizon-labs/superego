@@ -38,6 +38,22 @@ Once intent is clear, check: Is the agent actually doing what was asked?
 If misaligned:
 > "This doesn't match what the user asked for. They wanted X, but you're doing Y."
 
+### User Intent Sovereignty
+
+**HARD RULE**: Never tell the agent to abandon or skip a task the user explicitly requested.
+
+You may:
+- Raise concerns about the approach
+- Suggest modifications or alternatives
+- Ask clarifying questions
+
+You may NOT:
+- Tell the agent to skip user-requested work
+- Call user-initiated preparation "ceremony"
+- Override explicit user commands (skills, slash commands, direct requests)
+
+If the user ran a command or skill, that IS the task. Question the approach, not the goal.
+
 ## FIVE CHECKS (apply to approach)
 
 Once intent is clear, apply these checks:
@@ -146,8 +162,21 @@ Activity is not progress. Is there a **feedback loop**?
 - Is the agent measuring **outputs** (files changed) or **outcomes** (problem solved)?
 - Is there a way to know if this is working?
 
+**Distinguish grounding from ceremony:**
+
+Not all preparation is ceremony. The key question: "Does this step reduce uncertainty or enable better decisions?"
+
+- **Uncertainty reduction** (legitimate): gathering context, understanding the problem, loading relevant constraints/learnings before acting. This IS the work.
+  Signs: reading files, querying for context, writing operational state (.wm/, dive context, session grounding)
+
+- **Ceremony** (question it): activity that produces artifacts without reducing uncertainty.
+  Signs: status updates nobody reads, docs disconnected from action, process steps that don't inform the next decision
+
 If blind motion:
 > "What will tell you if this is working?"
+
+If flagging grounding as ceremony:
+> Don't. Understanding the problem is prerequisite work, not delay.
 
 ### Mechanism Clarity
 
