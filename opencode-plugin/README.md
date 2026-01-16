@@ -100,9 +100,22 @@ mv superego.js ~/.config/opencode/plugin/
 # 3. In each project, ask OpenCode to initialize superego. For example: "use the superego tool to initialize the project"
 ```
 
+## Evaluation Modes
+
+Superego supports two evaluation modes (default: **pull**):
+
+| Mode | Description |
+|------|-------------|
+| `pull` | On-demand evaluation only. Use `superego_review` tool at decision points. (Default) |
+| `always` | Automatic evaluation on session idle (more aggressive). |
+
+To change modes: use the `superego` tool with `mode` command and specify `always` or `pull`.
+
 ## Tool Commands
 
-The plugin provides a single `superego` tool with these commands:
+The plugin provides two tools:
+
+### `superego` - Management commands
 
 | Command | Description |
 |---------|-------------|
@@ -111,10 +124,20 @@ The plugin provides a single `superego` tool with these commands:
 | `disable` | Temporarily disable superego (hooks won't fire) |
 | `enable` | Re-enable superego after disable |
 | `remove` | Remove superego from project (deletes `.superego/`) |
+| `mode` | Show or change evaluation mode (`always` or `pull`) |
 
-Usage: To initialize superego, ask OpenCode: \"use the superego tool with init\".
+Usage: To initialize superego, ask OpenCode: "use the superego tool with init".
 
-You can also ask it to \"check superego status\".
+### `superego_review` - On-demand evaluation
+
+Use this tool at decision points to get feedback:
+- Before committing to a plan or approach
+- When choosing between alternatives
+- Before non-trivial implementations
+- When the task feels complex or uncertain
+- Before claiming work is done
+
+Requires the current session ID as argument.
 
 ## Test Plan
 
