@@ -134,6 +134,12 @@ enum Commands {
         /// What to review: "staged", "pr", or a file path (default: staged, fallback to uncommitted)
         target: Option<String>,
     },
+
+    /// Review changes using Codex LLM (for Codex skill)
+    ReviewCodex {
+        /// What to review: "staged", "pr", or a file path (default: staged, fallback to uncommitted)
+        target: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -805,6 +811,32 @@ fn main() {
             eprintln!("Reviewing...");
 
             match review::review(superego_dir, target) {
+                Ok(result) => {
+                    println!("\n--- Review: {} ---\n", result.target_description);
+                    println!("{}", result.feedback);
+                }
+                Err(review::ReviewError::NoDiff(msg)) => {
+                    println!("Nothing to review: {}", msg);
+                }
+                Err(e) => {
+                    eprintln!("Review failed: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Commands::ReviewCodex { target } => {
+            let superego_dir = Path::new(".superego");
+
+            if !superego_dir.exists() {
+                eprintln!("No .superego directory found. Run 'sg init' first.");
+                std::process::exit(1);
+            }
+
+            let target = review::ReviewTarget::from_arg(target.as_deref());
+
+            eprintln!("Reviewing (Codex)...");
+
+            match review::review_codex(superego_dir, target) {
                 Ok(result) => {
                     println!("\n--- Review: {} ---\n", result.target_description);
                     println!("{}", result.feedback);
