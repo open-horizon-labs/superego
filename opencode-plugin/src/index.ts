@@ -46,6 +46,28 @@ function loadPrompt(directory: string): string | null {
   }
 }
 
+type SuperegoMode = "always" | "pull";
+
+function loadMode(directory: string): SuperegoMode {
+  const configPath = join(directory, SUPEREGO_DIR, "config.yaml");
+  if (!existsSync(configPath)) return "pull"; // Default to pull mode
+  try {
+    const content = readFileSync(configPath, "utf-8");
+    // Simple line-by-line parsing (no YAML dependency)
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("mode:")) {
+        const value = trimmed.slice(5).trim().toLowerCase();
+        if (value === "always") return "always";
+        if (value === "pull") return "pull";
+      }
+    }
+  } catch {
+    // Ignore errors, default to pull
+  }
+  return "pull"; // Default to pull mode
+}
+
 function parseDecision(response: string): { block: boolean; feedback: string } {
   const lines = response.trim().split("\n");
   const decision = lines[0]?.trim() || "";
@@ -88,8 +110,13 @@ export const Superego: Plugin = async ({ directory, client }) => {
   }
 
   const prompt = initialized ? loadPrompt(directory) : null;
+  const mode = initialized ? loadMode(directory) : "always";
+
   if (initialized && !prompt) {
     log(superegoDir, "No prompt.md found, evaluation disabled");
+  }
+  if (initialized) {
+    log(superegoDir, `Mode: ${mode}`);
   }
 
   return {
@@ -102,12 +129,14 @@ export const Superego: Plugin = async ({ directory, client }) => {
     },
     tool: {
       superego: tool({
-        description: "Manage superego metacognitive advisor. Commands: status (default), init, disable, enable, remove.",
+        description: "Manage superego metacognitive advisor. Commands: status (default), init, disable, enable, remove, mode.",
         args: {
-          command: tool.schema.enum(["status", "init", "disable", "enable", "remove"]).default("status"),
+          command: tool.schema.enum(["status", "init", "disable", "enable", "remove", "mode"]).default("status"),
+          mode_value: tool.schema.enum(["always", "pull"]).optional().describe("Mode to set (for 'mode' command)"),
         },
-        async execute({ command }) {
+        async execute({ command, mode_value }) {
           const disabledFile = join(superegoDir, ".disabled");
+          const configPath = join(superegoDir, "config.yaml");
 
           switch (command) {
             case "status":
@@ -118,7 +147,8 @@ export const Superego: Plugin = async ({ directory, client }) => {
                 return "Superego initialized but DISABLED. Use 'superego enable' to re-enable.";
               }
               const hasPrompt = existsSync(join(superegoDir, "prompt.md"));
-              return `Superego ENABLED. Prompt: ${hasPrompt ? "found" : "missing"}`;
+              const currentMode = loadMode(directory);
+              return `Superego ENABLED. Mode: ${currentMode}. Prompt: ${hasPrompt ? "found" : "missing"}`;
 
             case "init":
               if (existsSync(superegoDir)) {
@@ -159,6 +189,111 @@ export const Superego: Plugin = async ({ directory, client }) => {
               }
               rmSync(superegoDir, { recursive: true, force: true });
               return "Superego removed. Restart OpenCode to complete cleanup.";
+
+            case "mode":
+              if (!existsSync(superegoDir)) {
+                return "Superego not initialized. Use 'superego init' first.";
+              }
+              if (!mode_value) {
+                // Show current mode
+                const current = loadMode(directory);
+                return `Current mode: ${current}. Use 'superego mode always' or 'superego mode pull' to change.`;
+              }
+              // Update config.yaml with new mode
+              let config = "";
+              if (existsSync(configPath)) {
+                config = readFileSync(configPath, "utf-8");
+                // Replace existing mode line or append
+                if (config.includes("mode:")) {
+                  config = config.replace(/^mode:.*$/m, `mode: ${mode_value}`);
+                } else {
+                  config = `mode: ${mode_value}\n${config}`;
+                }
+              } else {
+                config = `mode: ${mode_value}\n`;
+              }
+              writeFileSync(configPath, config);
+              return `Mode set to '${mode_value}'. Restart OpenCode for changes to take effect.`;
+          }
+        },
+      }),
+      superego_review: tool({
+        description: "Run superego evaluation on the current session. Use at decision points: before committing to a plan, when choosing alternatives, before non-trivial implementations, when uncertain, or before claiming work is done.",
+        args: {
+          session_id: tool.schema.string().describe("The session ID to evaluate (required)"),
+        },
+        async execute({ session_id }) {
+          if (!initialized) {
+            return "Superego not initialized. Use 'superego init' first.";
+          }
+          if (!prompt) {
+            return "No prompt.md found. Superego cannot evaluate.";
+          }
+
+          log(superegoDir, `Manual review requested for ${session_id}`);
+
+          try {
+            // Get conversation messages
+            const messagesResult = await client.session.messages({ path: { id: session_id } });
+            const messages = messagesResult.data;
+
+            if (!messages?.length) {
+              return "No messages to evaluate.";
+            }
+
+            // Extract model from session
+            const originalModel = messages[0]?.info?.model;
+            const modelString = originalModel ? `${originalModel.providerID}/${originalModel.modelID}` : undefined;
+
+            // Format conversation for evaluation
+            const conversation = formatConversation(messages);
+
+            // Create eval session
+            const evalSession = await client.session.create({
+              body: { title: "[superego-eval]" }
+            });
+            const evalSessionId = (evalSession as any)?.data?.id || (evalSession as any)?.id;
+
+            if (!evalSessionId) {
+              return "Failed to create evaluation session.";
+            }
+            evalSessionIds.add(evalSessionId);
+
+            const evalPrompt = `${prompt}\n\nIMPORTANT: You are a verifier only. Output DECISION and feedback text. DO NOT USE TOOLS.\n\n---\n\n## Conversation to Evaluate\n\n${conversation}`;
+
+            log(superegoDir, `Calling LLM for review with model ${modelString || "default"}...`);
+            const result = await client.session.prompt({
+              path: { id: evalSessionId },
+              body: {
+                model: originalModel ? { providerID: originalModel.providerID, modelID: originalModel.modelID } : undefined,
+                parts: [{ type: "text", text: evalPrompt }],
+                tools: { write: false, edit: false, bash: false },
+              },
+            });
+
+            // Extract response text
+            const resultData = (result as any)?.data || result;
+            const response = resultData?.parts?.map((p: any) => p.text || p.content || "").join("\n")
+              || resultData?.text
+              || resultData?.content
+              || "";
+
+            // Clean up eval session
+            try {
+              await client.session.delete({ path: { id: evalSessionId } });
+            } catch {}
+
+            const { block, feedback } = parseDecision(response);
+            log(superegoDir, `Review decision: ${block ? "BLOCK" : "ALLOW"}`);
+
+            if (block && feedback) {
+              return `SUPEREGO FEEDBACK (concerns found):\n\n${feedback}`;
+            } else {
+              return "Superego: No concerns.";
+            }
+          } catch (e) {
+            log(superegoDir, `ERROR: Review failed: ${e}`);
+            return `Review failed: ${e}`;
           }
         },
       }),
@@ -171,7 +306,12 @@ export const Superego: Plugin = async ({ directory, client }) => {
         return;
       }
 
-      // Session idle - run evaluation
+      // Skip automatic evaluation in pull mode (user uses review tool manually)
+      if (mode === "pull") {
+        return;
+      }
+
+      // Session idle - run evaluation (only in "always" mode)
       if (event.type === "session.idle") {
         const sessionId = (event as any).properties?.info?.id || (event as any).properties?.sessionID || (event as any).properties?.id;
         if (!sessionId || !prompt) {
