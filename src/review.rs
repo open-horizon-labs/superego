@@ -6,6 +6,7 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 use crate::claude;
+use crate::codex_llm;
 use crate::prompts;
 
 /// Run a git command and check for errors
@@ -199,6 +200,43 @@ pub fn review(superego_dir: &Path, target: ReviewTarget) -> Result<ReviewResult,
 
     // Call the LLM
     let response = claude::invoke(&system_prompt, &message, claude::ClaudeOptions::default())
+        .map_err(|e| ReviewError::LlmError(e.to_string()))?;
+
+    Ok(ReviewResult {
+        feedback: response.result,
+        target_description: description,
+    })
+}
+
+/// Run a review using Codex LLM (for Codex skill)
+pub fn review_codex(superego_dir: &Path, target: ReviewTarget) -> Result<ReviewResult, ReviewError> {
+    if !superego_dir.exists() {
+        return Err(ReviewError::NotInitialized);
+    }
+
+    // Get the diff
+    let (diff, description) = get_diff(&target)?;
+
+    // Load the current prompt
+    let prompt_path = superego_dir.join("prompt.md");
+    let system_prompt = if prompt_path.exists() {
+        std::fs::read_to_string(&prompt_path)
+            .unwrap_or_else(|_| prompts::PromptType::Code.content().to_string())
+    } else {
+        prompts::PromptType::Code.content().to_string()
+    };
+
+    // Prepare the message
+    let message = format!(
+        "Review the following changes and provide feedback.\n\n\
+        This is an on-demand review requested by the user (not a hook evaluation).\n\
+        Provide constructive feedback - no DECISION/BLOCK format needed, just helpful observations.\n\n\
+        --- CHANGES ({}) ---\n{}\n--- END CHANGES ---",
+        description, diff
+    );
+
+    // Call Codex LLM
+    let response = codex_llm::invoke(&system_prompt, &message, None)
         .map_err(|e| ReviewError::LlmError(e.to_string()))?;
 
     Ok(ReviewResult {

@@ -144,7 +144,8 @@ The plugin's hooks use `${CLAUDE_PROJECT_DIR}` to find the project's `.superego/
 - `sg init` - Initialize superego for a project
 - `sg migrate` - Remove legacy hooks (for users upgrading from < v0.4.0)
 - `sg mode` - Output current evaluation mode (always or pull)
-- `sg review` - On-demand evaluation (advisory, non-blocking)
+- `sg review` - On-demand evaluation (advisory, non-blocking) - uses Claude
+- `sg review-codex` - On-demand evaluation for Codex skill - uses Codex LLM
 - `sg audit` - Analyze decision history with LLM (patterns, timeline, insights)
 - `sg audit --json` - JSON output for programmatic use
 - `sg history --limit N` - Show recent decisions

@@ -137,9 +137,9 @@ The evaluation respects the active prompt from `.superego/config.yaml`.
 
 **On-Demand Review:**
 ```bash
-sg review            # Review staged changes (git diff --cached)
-sg review pr         # Review PR diff vs base branch
-sg review <file>     # Review specific file
+sg review-codex            # Review staged changes (git diff --cached)
+sg review-codex pr         # Review PR diff vs base branch
+sg review-codex <file>     # Review specific file
 ```
 
 **Agent Files:**

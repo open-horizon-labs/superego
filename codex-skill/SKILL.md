@@ -156,23 +156,23 @@ Get on-demand review of changes. Advisory feedback (non-blocking).
 
 **Run:**
 ```bash
-sg review            # Review staged changes (git diff --cached)
-sg review staged     # Same as above
-sg review pr         # Review PR diff vs base branch
-sg review <file>     # Review specific file
+sg review-codex            # Review staged changes (git diff --cached)
+sg review-codex staged     # Same as above
+sg review-codex pr         # Review PR diff vs base branch
+sg review-codex <file>     # Review specific file
 ```
 
 **Examples:**
 ```bash
 # Before committing
 git add .
-sg review
+sg review-codex
 
 # Before creating PR
-sg review pr
+sg review-codex pr
 
 # Review specific file
-sg review src/main.rs
+sg review-codex src/main.rs
 ```
 
 **Uses:** Current active prompt (code/writing/learning)
