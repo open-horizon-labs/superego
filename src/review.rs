@@ -209,7 +209,10 @@ pub fn review(superego_dir: &Path, target: ReviewTarget) -> Result<ReviewResult,
 }
 
 /// Run a review using Codex LLM (for Codex skill)
-pub fn review_codex(superego_dir: &Path, target: ReviewTarget) -> Result<ReviewResult, ReviewError> {
+pub fn review_codex(
+    superego_dir: &Path,
+    target: ReviewTarget,
+) -> Result<ReviewResult, ReviewError> {
     if !superego_dir.exists() {
         return Err(ReviewError::NotInitialized);
     }
