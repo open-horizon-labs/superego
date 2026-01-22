@@ -42,6 +42,10 @@ jobs:
   #   build:all    - Build everything
   #   build-me     - Trigger build (required for labeled events)
   #
+  # NOTE: Adding build:macos or build:linux alone won't trigger a build.
+  # You must also add the 'build-me' label to actually start the workflow.
+  # This prevents accidental builds when labels are added for categorization.
+  #
   plan:
     name: Plan
     runs-on: ubuntu-latest
@@ -213,6 +217,9 @@ jobs:
           tar -czvf sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.tar.gz sg
           shasum -a 256 sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.tar.gz > sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
 
+      - name: Verify binary
+        run: ./dist/sg --version
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -279,6 +286,9 @@ jobs:
           cd dist
           tar -czvf sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.tar.gz sg
           sha256sum sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.tar.gz > sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
+
+      - name: Verify binary
+        run: ./dist/sg --version
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -424,6 +434,7 @@ jobs:
       - name: Publish to crates.io
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        # --allow-dirty is needed because we modify Cargo.toml version in CI
         run: cargo publish --allow-dirty
 
   # =============================================================================
