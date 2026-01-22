@@ -1,3 +1,4 @@
+<!-- NOTE: This file is synced from codex-skill/SKILL.md. Edit the source there and copy here. -->
 ---
 name: superego
 description: Metacognitive oversight. Invoke with "$superego" to evaluate, "$superego init" to set up, "$superego remove" to uninstall.

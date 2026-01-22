@@ -4,10 +4,169 @@ on:
   push:
     tags:
       - 'v*'
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (skip publishing)'
+        type: boolean
+        default: false
+      build_macos:
+        description: 'Build macOS binaries'
+        type: boolean
+        default: false
+      build_linux:
+        description: 'Build Linux binaries'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # =============================================================================
+  # PLAN: Centralized decision logic
+  # =============================================================================
+  # This job runs first (~5s) and computes which builds are needed.
+  # All other jobs check plan outputs instead of duplicating condition logic.
+  #
+  # Labels (for PRs):
+  #   build:macos  - Build macOS binaries
+  #   build:linux  - Build Linux binaries
+  #   build:all    - Build everything
+  #   build-me     - Trigger build (required for labeled events)
+  #
+  # NOTE: Adding build:macos or build:linux alone won't trigger a build.
+  # You must also add the 'build-me' label to actually start the workflow.
+  # This prevents accidental builds when labels are added for categorization.
+  #
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      git_sha: ${{ steps.version.outputs.git_sha }}
+      is_release: ${{ steps.decide.outputs.is_release }}
+      is_dry_run: ${{ steps.decide.outputs.is_dry_run }}
+      build_macos: ${{ steps.decide.outputs.build_macos }}
+      build_linux: ${{ steps.decide.outputs.build_linux }}
+      should_skip: ${{ steps.decide.outputs.should_skip }}
+    steps:
+      - name: Compute version
+        id: version
+        run: |
+          # Version from tag (strip 'v' prefix)
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            VERSION="0.0.0-pr${{ github.event.pull_request.number }}"
+          else
+            VERSION="0.0.0-dev"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Git SHA (short)
+          GIT_SHA="${GITHUB_SHA:0:7}"
+          echo "git_sha=$GIT_SHA" >> $GITHUB_OUTPUT
+
+          echo "::notice::Build version: $VERSION ($GIT_SHA)"
+
+      - name: Decide what to build
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          LABEL_ADDED: ${{ github.event.label.name }}
+          HAS_LABEL_BUILD_ME: ${{ contains(github.event.pull_request.labels.*.name, 'build-me') }}
+          HAS_LABEL_ALL: ${{ contains(github.event.pull_request.labels.*.name, 'build:all') }}
+          HAS_LABEL_MACOS: ${{ contains(github.event.pull_request.labels.*.name, 'build:macos') }}
+          HAS_LABEL_LINUX: ${{ contains(github.event.pull_request.labels.*.name, 'build:linux') }}
+          INPUT_MACOS: ${{ inputs.build_macos }}
+          INPUT_LINUX: ${{ inputs.build_linux }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          # Skip if triggered by a non-build label (only 'build-me' triggers builds)
+          if [[ "$EVENT_ACTION" == "labeled" && "$LABEL_ADDED" != "build-me" ]]; then
+            echo "::notice::Skipping: labeled event for '$LABEL_ADDED' (only 'build-me' triggers builds)"
+            echo "should_skip=true" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "is_dry_run=true" >> $GITHUB_OUTPUT
+            echo "build_macos=false" >> $GITHUB_OUTPUT
+            echo "build_linux=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # For PR events (opened/synchronize/reopened), require 'build-me' label
+          if [[ "$EVENT_NAME" == "pull_request" && "$HAS_LABEL_BUILD_ME" != "true" ]]; then
+            echo "::notice::Skipping: PR does not have 'build-me' label"
+            echo "should_skip=true" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "is_dry_run=true" >> $GITHUB_OUTPUT
+            echo "build_macos=false" >> $GITHUB_OUTPUT
+            echo "build_linux=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "should_skip=false" >> $GITHUB_OUTPUT
+
+          # Is this a release?
+          IS_RELEASE=$([[ "$EVENT_NAME" == "push" && "${{ github.ref_type }}" == "tag" ]] && echo "true" || echo "false")
+          echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
+
+          # Dry run? (PRs are always dry run, workflow_dispatch can override)
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            IS_DRY_RUN="true"
+          elif [[ "$INPUT_DRY_RUN" == "true" ]]; then
+            IS_DRY_RUN="true"
+          else
+            IS_DRY_RUN="false"
+          fi
+          echo "is_dry_run=$IS_DRY_RUN" >> $GITHUB_OUTPUT
+
+          # Helper: should we build everything?
+          should_build_all() {
+            [[ "$IS_RELEASE" == "true" ]] && return 0
+            [[ "$HAS_LABEL_ALL" == "true" ]] && return 0
+            return 1
+          }
+
+          # macOS builds
+          BUILD_MACOS="false"
+          if should_build_all; then BUILD_MACOS="true"; fi
+          if [[ "$HAS_LABEL_MACOS" == "true" ]]; then BUILD_MACOS="true"; fi
+          if [[ "$INPUT_MACOS" == "true" ]]; then BUILD_MACOS="true"; fi
+          echo "build_macos=$BUILD_MACOS" >> $GITHUB_OUTPUT
+
+          # Linux builds
+          BUILD_LINUX="false"
+          if should_build_all; then BUILD_LINUX="true"; fi
+          if [[ "$HAS_LABEL_LINUX" == "true" ]]; then BUILD_LINUX="true"; fi
+          if [[ "$INPUT_LINUX" == "true" ]]; then BUILD_LINUX="true"; fi
+          echo "build_linux=$BUILD_LINUX" >> $GITHUB_OUTPUT
+
+          # Summary
+          echo "### Build Plan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Release | $IS_RELEASE |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dry Run | $IS_DRY_RUN |" >> $GITHUB_STEP_SUMMARY
+          echo "| macOS | $BUILD_MACOS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Linux | $BUILD_LINUX |" >> $GITHUB_STEP_SUMMARY
+
+  # =============================================================================
+  # BUILD: OpenCode plugin
+  # =============================================================================
   build-opencode-plugin:
     name: Build OpenCode Plugin
+    needs: plan
+    if: needs.plan.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,60 +185,308 @@ jobs:
           name: superego-opencode-plugin
           path: opencode-plugin/dist/index.js
 
-  release:
-    name: Create Release
-    needs: build-opencode-plugin
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+  # =============================================================================
+  # BUILD: macOS targets (native)
+  # =============================================================================
+  build-macos:
+    name: Build macOS (${{ matrix.arch }})
+    needs: plan
+    if: needs.plan.outputs.build_macos == 'true' && needs.plan.outputs.should_skip != 'true'
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            arch: arm64
+          - target: x86_64-apple-darwin
+            arch: x64
     steps:
       - uses: actions/checkout@v4
-      - name: Download OpenCode plugin
+
+      - name: Set version in Cargo.toml
+        run: |
+          VERSION="${{ needs.plan.outputs.version }}"
+          perl -i -pe "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          shared-key: macos-${{ matrix.target }}
+          save-if: ${{ needs.plan.outputs.is_release == 'true' }}
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package binary
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/sg dist/
+          cd dist
+          tar -czvf sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.tar.gz sg
+          shasum -a 256 sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.tar.gz > sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
+
+      - name: Verify binary
+        run: ./dist/sg --version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sg-${{ matrix.target }}
+          path: dist/sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.*
+
+  # =============================================================================
+  # BUILD: Linux targets (zigbuild for cross-compilation)
+  # =============================================================================
+  build-linux:
+    name: Build Linux (${{ matrix.arch }})
+    needs: plan
+    if: needs.plan.outputs.build_linux == 'true' && needs.plan.outputs.should_skip != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            arch: x64
+          - target: aarch64-unknown-linux-musl
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version in Cargo.toml
+        run: |
+          VERSION="${{ needs.plan.outputs.version }}"
+          perl -i -pe "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          shared-key: zigbuild-${{ matrix.target }}
+          save-if: ${{ needs.plan.outputs.is_release == 'true' }}
+
+      - name: Install zig
+        run: |
+          curl -L https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz | tar -xJ
+          sudo mv zig-linux-x86_64-0.13.0 /opt/zig
+          echo "/opt/zig" >> $GITHUB_PATH
+
+      - name: Cache cargo-zigbuild
+        id: cache-zigbuild
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-zigbuild
+          key: cargo-zigbuild-0.20
+
+      - name: Install cargo-zigbuild
+        if: steps.cache-zigbuild.outputs.cache-hit != 'true'
+        run: cargo install cargo-zigbuild --locked
+
+      - name: Build with zigbuild
+        run: cargo zigbuild --release --target ${{ matrix.target }}
+
+      - name: Package binary
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/sg dist/
+          cd dist
+          tar -czvf sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.tar.gz sg
+          sha256sum sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.tar.gz > sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
+
+      - name: Verify binary
+        run: ./dist/sg --version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sg-${{ matrix.target }}
+          path: dist/sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.*
+
+  # =============================================================================
+  # RELEASE: Create GitHub release and upload artifacts
+  # =============================================================================
+  release:
+    name: Release
+    needs: [plan, build-macos, build-linux, build-opencode-plugin]
+    runs-on: ubuntu-latest
+    if: needs.plan.outputs.is_release == 'true' && needs.plan.outputs.is_dry_run != 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: superego-opencode-plugin
-          path: ./artifacts
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la artifacts/
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREV_TAG="$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo '')"
+          NOTES_FLAG=""
+          if [ -n "$PREV_TAG" ]; then
+            NOTES_FLAG="--notes-start-tag $PREV_TAG"
+          fi
+          gh release create "v${{ needs.plan.outputs.version }}" \
+            --title "v${{ needs.plan.outputs.version }}" \
+            --generate-notes \
+            $NOTES_FLAG \
+            artifacts/*
+
+  # =============================================================================
+  # PUBLISH: Homebrew tap
+  # =============================================================================
+  publish-homebrew:
+    name: Publish Homebrew
+    needs: [plan, release]
+    runs-on: ubuntu-latest
+    if: needs.plan.outputs.is_release == 'true' && needs.plan.outputs.is_dry_run != 'true'
+    steps:
+      - uses: actions/checkout@v4
         with:
-          files: ./artifacts/index.js
-          generate_release_notes: true
-          body: |
-            ## Installation
+          repository: cloud-atlas-ai/homebrew-superego
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
 
-            ### Claude Code
-            ```bash
-            /plugin marketplace add cloud-atlas-ai/superego
-            /plugin install superego@superego
-            /superego:init
-            ```
+      - name: Download artifacts for checksums
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
 
-             ### OpenCode
-             ```bash
-             mkdir -p .opencode/plugin
-             curl -L -o .opencode/plugin/superego.js \
-               https://github.com/cloud-atlas-ai/superego/releases/latest/download/index.js
-             ```
-             See [opencode-plugin/README.md](https://github.com/cloud-atlas-ai/superego/blob/main/opencode-plugin/README.md) for details.
+      - name: Update Homebrew formula
+        run: |
+          VERSION="${{ needs.plan.outputs.version }}"
+          ARM64_MAC_SHA=$(cat artifacts/sg-${VERSION}-aarch64-apple-darwin.tar.gz.sha256 | awk '{print $1}')
+          X64_MAC_SHA=$(cat artifacts/sg-${VERSION}-x86_64-apple-darwin.tar.gz.sha256 | awk '{print $1}')
+          X64_LINUX_SHA=$(cat artifacts/sg-${VERSION}-x86_64-unknown-linux-musl.tar.gz.sha256 | awk '{print $1}')
+          ARM64_LINUX_SHA=$(cat artifacts/sg-${VERSION}-aarch64-unknown-linux-musl.tar.gz.sha256 | awk '{print $1}')
 
-             ### Codex
-             1. **Enable skills in `~/.codex/config.toml`:**
-                ```toml
-                [features]
-                skills = true
-                ```
-             2. **Install the skill:**
-                ```bash
-                mkdir -p ~/.codex/skills/superego
-                curl -o ~/.codex/skills/superego/SKILL.md \
-                  https://raw.githubusercontent.com/cloud-atlas-ai/superego/main/codex-skill/SKILL.md
-                ```
-             3. **Initialize in your project by asking the agent:**
-                > `$superego init`
-                
-                This will create the `.superego/` directory and also add guidance to `AGENTS.md` to help the agent use the skill proactively.
+          cat > homebrew-tap/Formula/superego.rb << EOF
+          class Superego < Formula
+            desc "Metacognitive advisor for Claude Code"
+            homepage "https://github.com/cloud-atlas-ai/superego"
+            version "${VERSION}"
+            license "LicenseRef-Proprietary"
 
-             See [codex-skill/README.md](https://github.com/cloud-atlas-ai/superego/blob/main/codex-skill/README.md) for more details.
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/cloud-atlas-ai/superego/releases/download/v${VERSION}/sg-${VERSION}-aarch64-apple-darwin.tar.gz"
+                sha256 "${ARM64_MAC_SHA}"
+              else
+                url "https://github.com/cloud-atlas-ai/superego/releases/download/v${VERSION}/sg-${VERSION}-x86_64-apple-darwin.tar.gz"
+                sha256 "${X64_MAC_SHA}"
+              end
+            end
 
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/cloud-atlas-ai/superego/releases/download/v${VERSION}/sg-${VERSION}-aarch64-unknown-linux-musl.tar.gz"
+                sha256 "${ARM64_LINUX_SHA}"
+              else
+                url "https://github.com/cloud-atlas-ai/superego/releases/download/v${VERSION}/sg-${VERSION}-x86_64-unknown-linux-musl.tar.gz"
+                sha256 "${X64_LINUX_SHA}"
+              end
+            end
 
-            ---
+            def install
+              bin.install "sg"
+            end
+
+            test do
+              system "#{bin}/sg", "--version"
+            end
+          end
+          EOF
+
+      - name: Commit and push
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/superego.rb
+          git commit -m "superego ${{ needs.plan.outputs.version }}"
+          git push
+
+  # =============================================================================
+  # PUBLISH: crates.io
+  # =============================================================================
+  publish-crates:
+    name: Publish crates.io
+    needs: [plan, release]
+    runs-on: ubuntu-latest
+    if: needs.plan.outputs.is_release == 'true' && needs.plan.outputs.is_dry_run != 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version in all package files
+        run: |
+          VERSION="${{ needs.plan.outputs.version }}"
+          # Update Cargo.toml
+          perl -i -pe "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
+          # Update plugin/.claude-plugin/plugin.json
+          sed -i 's/"version": "[^"]*"/"version": "'"${VERSION}"'"/' plugin/.claude-plugin/plugin.json
+          # Update .claude-plugin/marketplace.json
+          jq --arg v "${VERSION}" '.plugins[0].version = $v' .claude-plugin/marketplace.json > .claude-plugin/marketplace.json.tmp && mv .claude-plugin/marketplace.json.tmp .claude-plugin/marketplace.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        # --allow-dirty is needed because we modify Cargo.toml version in CI
+        run: cargo publish --allow-dirty
+
+  # =============================================================================
+  # PUBLISH: npm (OpenCode plugin)
+  # =============================================================================
+  publish-npm:
+    name: Publish npm
+    needs: [plan, release]
+    runs-on: ubuntu-latest
+    environment: npm
+    if: needs.plan.outputs.is_release == 'true' && needs.plan.outputs.is_dry_run != 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node for npm publish
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Upgrade npm for OIDC support
+        run: npm install -g npm@latest
+
+      - name: Update package.json version
+        working-directory: opencode-plugin
+        run: |
+          jq --arg v "${{ needs.plan.outputs.version }}" '.version = $v' package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+      - name: Install dependencies
+        working-directory: opencode-plugin
+        run: bun install
+
+      - name: Build
+        working-directory: opencode-plugin
+        run: bun run build
+
+      - name: Publish to npm
+        working-directory: opencode-plugin
+        run: npm publish --access public --provenance

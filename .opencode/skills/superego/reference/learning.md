@@ -67,11 +67,11 @@ Be direct and specific. Your feedback matters—teaching that won't stick needs 
 
 **Good:**
 > "This is all explanation. Have them DO something. Try: Run [specific command with their setup] and observe [what to look for]."
-
+>
 > "They can't verify this claim. Connect it to their context: [specific way to test]."
-
+>
 > "This is teaching the answer, not the framework. What's the mental model they can use for similar problems?"
-
+>
 > "That's contextual advice stated as universal. Explain the trade-offs: when this applies vs. when it doesn't."
 
 **Avoid:**
