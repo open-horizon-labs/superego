@@ -83,6 +83,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_ACTION: ${{ github.event.action }}
           LABEL_ADDED: ${{ github.event.label.name }}
+          HAS_LABEL_BUILD_ME: ${{ contains(github.event.pull_request.labels.*.name, 'build-me') }}
           HAS_LABEL_ALL: ${{ contains(github.event.pull_request.labels.*.name, 'build:all') }}
           HAS_LABEL_MACOS: ${{ contains(github.event.pull_request.labels.*.name, 'build:macos') }}
           HAS_LABEL_LINUX: ${{ contains(github.event.pull_request.labels.*.name, 'build:linux') }}
@@ -93,6 +94,17 @@ jobs:
           # Skip if triggered by a non-build label (only 'build-me' triggers builds)
           if [[ "$EVENT_ACTION" == "labeled" && "$LABEL_ADDED" != "build-me" ]]; then
             echo "::notice::Skipping: labeled event for '$LABEL_ADDED' (only 'build-me' triggers builds)"
+            echo "should_skip=true" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "is_dry_run=true" >> $GITHUB_OUTPUT
+            echo "build_macos=false" >> $GITHUB_OUTPUT
+            echo "build_linux=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # For PR events (opened/synchronize/reopened), require 'build-me' label
+          if [[ "$EVENT_NAME" == "pull_request" && "$HAS_LABEL_BUILD_ME" != "true" ]]; then
+            echo "::notice::Skipping: PR does not have 'build-me' label"
             echo "should_skip=true" >> $GITHUB_OUTPUT
             echo "is_release=false" >> $GITHUB_OUTPUT
             echo "is_dry_run=true" >> $GITHUB_OUTPUT
