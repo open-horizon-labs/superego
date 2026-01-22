@@ -310,10 +310,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          PREV_TAG="$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo '')"
+          NOTES_FLAG=""
+          if [ -n "$PREV_TAG" ]; then
+            NOTES_FLAG="--notes-start-tag $PREV_TAG"
+          fi
           gh release create "v${{ needs.plan.outputs.version }}" \
             --title "v${{ needs.plan.outputs.version }}" \
             --generate-notes \
-            --notes-start-tag "$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo '')" \
+            $NOTES_FLAG \
             artifacts/*
 
   # =============================================================================
@@ -402,10 +407,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set version in Cargo.toml
+      - name: Set version in all package files
         run: |
           VERSION="${{ needs.plan.outputs.version }}"
+          # Update Cargo.toml
           perl -i -pe "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
+          # Update plugin/.claude-plugin/plugin.json
+          sed -i 's/"version": "[^"]*"/"version": "'"${VERSION}"'"/' plugin/.claude-plugin/plugin.json
+          # Update .claude-plugin/marketplace.json
+          jq --arg v "${VERSION}" '.plugins[0].version = $v' .claude-plugin/marketplace.json > .claude-plugin/marketplace.json.tmp && mv .claude-plugin/marketplace.json.tmp .claude-plugin/marketplace.json
 
       - uses: dtolnay/rust-toolchain@stable
 
