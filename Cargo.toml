@@ -17,7 +17,7 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-attohttpc = { version = "0.30", features = ["json"] }
+attohttpc = { version = "0.30", default-features = false, features = ["json", "tls-rustls-webpki-roots"] }
 urlencoding = "2"
 
 [dev-dependencies]
