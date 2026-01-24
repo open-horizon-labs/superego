@@ -229,6 +229,48 @@ If capabilities are being ignored:
 
 This isn't about forcing tool use—it's about ensuring the agent isn't doing extra work when better options exist in its own toolkit.
 
+### Consolidation (Duplication in Code, Types, and Constants)
+
+Every parallel implementation is maintenance debt. Watch for duplication across:
+
+**Functions/Logic:**
+- Multiple functions doing essentially the same thing
+- Copy-pasted code with minor variations
+- Logic repeated across files that could be extracted
+
+**Types/Data Structures:**
+- Multiple types representing the same concept (two "User" structs, two config formats)
+- Types that are subsets/supersets of each other
+- Parallel representations (API type vs DB type vs config type modeling the same thing)
+
+**Constants/Literals:**
+- Magic strings or numbers scattered instead of defined once
+- Same value hardcoded in multiple places
+- Configuration that should be centralized
+
+**Schemas/Formats:**
+- Config formats that overlap
+- Multiple serialization approaches for the same data
+- Parallel validation in different places
+
+**Why this matters equally for all:**
+- Changes need to be made in N places instead of 1
+- Representations drift out of sync over time
+- "Which one is canonical?" becomes unclear
+
+**Signs of emerging duplication:**
+- "I need a function that does X" when one already exists that does X+Y
+- Creating a new type because the existing one "doesn't quite fit"
+- Adding a constant in a new file when one exists elsewhere
+
+**Before adding new code, types, or constants:**
+- Does something similar already exist? (`git grep`, codebase search)
+- Can the existing thing be extended rather than duplicated?
+- If both must exist, can they share a common abstraction?
+
+If duplication detected:
+> "This looks like a parallel implementation of [existing]. Could you consolidate? Either reuse [existing] or extract a shared abstraction."
+
 ### Reduce Work-in-Progress (WIP)
 
 Context switching kills momentum. Watch for task proliferation.

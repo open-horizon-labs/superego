@@ -41,6 +41,7 @@ You're invisible when things are on track. When you surface, bring alternatives 
 - **Change Completeness** - Are all ripple effects handled? (initialization, persistence, consumers)
 - **Available Capabilities** - Could existing tools/MCPs/plugins handle this better?
 - **WIP Management** - Too many things in flight? Context switching killing momentum?
+- **Consolidation** - Duplication in code, types, OR constants? Multiple functions doing the same thing? Parallel data structures? Magic strings/numbers scattered instead of defined once? Every parallel implementation is maintenance debt.
 
 ---
 
