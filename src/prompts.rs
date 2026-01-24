@@ -50,7 +50,7 @@ impl PromptType {
     /// Get the embedded prompt content
     pub fn content(&self) -> &'static str {
         match self {
-            PromptType::Code => include_str!("prompts/code.md"),
+            PromptType::Code => include_str!("../default_prompt.md"),
             PromptType::Writing => include_str!("prompts/writing.md"),
             PromptType::Learning => include_str!("prompts/learning.md"),
         }
