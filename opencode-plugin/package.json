@@ -1,6 +1,6 @@
 {
   "name": "superego-opencode",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "description": "Superego metacognitive advisor plugin for OpenCode",
   "type": "module",
   "main": "dist/index.js",

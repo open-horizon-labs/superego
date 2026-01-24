@@ -300,7 +300,10 @@ jobs:
           sha256sum sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.tar.gz > sg-${{ needs.plan.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
 
       - name: Verify binary
-        run: ./dist/sg --version
+        run: |
+          # Can't execute cross-compiled binaries, verify with file command instead
+          file ./dist/sg
+          file ./dist/sg | grep -q "ELF 64-bit"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
